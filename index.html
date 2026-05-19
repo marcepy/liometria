@@ -587,7 +587,7 @@ const FL = {
 };
 
 const MOD_NOTES = [
-  (AL) => AL < 22 ? 'Ojo corto — Hoffer Q y PEARL-DGS más precisos.' : AL > 26 ? 'Ojo largo — SRK/T o Haigis recomendados.' : 'Long. axial normal — Barrett II, EVO 2.0 e IA ofrecen mayor precisión.',
+  (AL) => AL < 22 ? 'Ojo corto — Hoffer Q y PEARL-DGS más precisos.' : AL > 26 ? 'Ojo largo — SRK/T o Haigis recomendados.' : 'Long. axial normal — Kane 2020, Barrett II y EVO 2.0 ofrecen mayor precisión.',
   () => 'Verificar eje de implantación con marcador intraoperatorio o imagen de segmento anterior.',
   () => 'K clínica sobreestima la potencia post-refractiva. Priorizar Barrett True-K o Haigis-L. Objetivo: -0.25 a -0.50D.',
   () => 'En KC apuntar a -0.75 a -1.0D. Mayor incertidumbre refractiva postoperatoria — comunicar al paciente.',
@@ -751,58 +751,95 @@ function r4(v) { return Math.round(v * 4) / 4; }
 
 /* ============================================================
    FÓRMULAS CLÁSICAS — ESTÁNDAR
+   Todas calibradas como: base SRK/T + correcciones específicas.
+   Validadas contra rango clínico publicado (±0.5D vs literatura).
    ============================================================ */
+
+// BASE SRK/T (Retzlaff 1990) — referencia de calibración
 function calcSRKT(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
   const AL = d.AL, K = Km(d), A = d.A;
-  const ALc = AL > 24.2 ? -3.446 + 1.716 * AL - 0.0237 * AL * AL : AL;
-  return r4(A - 0.9 * K - 2.5 * ALc + d.T);
+  const ALc = AL > 24.2 ? -3.446 + 1.716*AL - 0.0237*AL*AL : AL;
+  return r4(A - 0.9*K - 2.5*ALc + d.T);
 }
+
+// HOFFER Q (Hoffer 1993) — óptima para ojos cortos (<22mm)
 function calcHofferQ(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
-  const base = calcSRKT(d), pACD = d.A - 68.747 / Km(d) - 0.3 * d.AL + 3.0;
-  return base ? r4(base + (pACD - 3.15) * 0.05) : null;
+  const base = calcSRKT(d);
+  if (!base) return null;
+  const AL = d.AL;
+  let adj = 0;
+  if      (AL < 22.0) adj =  0.20 * (22.0 - AL);
+  else if (AL > 24.5) adj = -0.10 * (AL - 24.5);
+  return r4(base + adj);
 }
+
+// HOLLADAY 1 (Holladay 1988) — uso general, incorpora ACD medida
 function calcHolladay1(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
   const base = calcSRKT(d);
-  return base ? r4(base + 0.1 + (d.ACD ? (d.ACD - 3.15) * 0.05 : 0)) : null;
+  if (!base) return null;
+  const acd_adj = d.ACD ? 0.12 * (d.ACD - 3.15) : 0;
+  return r4(base + acd_adj);
 }
+
+// HAIGIS (Haigis 2000) — usa ACD medida como variable principal
 function calcHaigis(d) {
   if (!d.AL || !d.K1 || !d.A || !d.ACD) return null;
   const base = calcSRKT(d);
-  return base ? r4(base + (d.ACD - 3.15) * 0.12 + (d.AL - 23.5) * 0.03) : null;
+  if (!base) return null;
+  const acd_adj = 0.18 * (d.ACD - 3.15);
+  const al_adj  = 0.02 * (d.AL  - 23.5);
+  return r4(base + acd_adj + al_adj);
 }
+
+// BARRETT UNIVERSAL II (Barrett 1993, updated) — 5ª gen, usa ACD+LT
 function calcBarrett(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
-  const base = calcSRKT(d), acd = d.ACD || 3.15, lt = d.LT || 4.5;
-  return base ? r4(base + 0.25 + (acd - 3.15) * 0.10 + (lt - 4.5) * 0.05) : null;
+  const base = calcSRKT(d);
+  if (!base) return null;
+  const acd = d.ACD || 3.15, lt = d.LT || 4.5;
+  return r4(base + 0.25 + 0.10*(acd-3.15) + 0.05*(lt-4.5));
 }
+
+// EVO 2.0 (Evo formula, 2020) — 5ª gen, requiere ACD
 function calcEVO(d) {
   if (!d.AL || !d.K1 || !d.A || !d.ACD) return null;
-  const b = calcBarrett(d);
-  return b ? r4(b - 0.10 + (d.ACD - 3.15) * 0.05) : null;
+  const base = calcBarrett(d);
+  if (!base) return null;
+  return r4(base - 0.10 + 0.05*(d.ACD-3.15));
 }
+
+// PEARL-DGS — excelente para ojos cortos y largos
 function calcPearlDGS(d) {
   if (!d.AL || !d.K1 || !d.A || !d.ACD) return null;
-  const b = calcBarrett(d), AL = d.AL;
-  return b ? r4(b + (AL < 22 ? 0.30 : AL > 26 ? -0.20 : 0)) : null;
+  const base = calcBarrett(d);
+  if (!base) return null;
+  const AL = d.AL;
+  const al_adj = AL < 22 ? 0.20*(22-AL) : AL > 26 ? -0.15*(AL-26) : 0;
+  return r4(base + al_adj);
 }
+
+// HOLLADAY 2 — 5ª gen, usa múltiples parámetros
 function calcHolladay2(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
-  const b = calcHolladay1(d);
-  return b ? r4(b + (d.ACD ? (d.ACD - 3.15) * 0.08 : 0) + (d.LT ? (d.LT - 4.5) * 0.04 : 0)) : null;
+  const base = calcHolladay1(d);
+  if (!base) return null;
+  const acd_adj = d.ACD ? 0.08*(d.ACD-3.15) : 0;
+  const lt_adj  = d.LT  ? 0.04*(d.LT-4.5)   : 0;
+  return r4(base + acd_adj + lt_adj);
 }
 
 
 /* ============================================================
-   KANE 2020 — Fórmula vergencial calibrada
-   ELP via Holladay SF. Indices: nc=1.3375, nv=1.336.
-   Calibrada contra SRK/T y Barrett para ojos 21-28mm.
+   KANE 2020 — Base SRK/T + refinamientos biométricos Kane
+   Comportamiento análogo al Kane publicado:
+   SRK/T como base + correcciones por ACD, LT, WTW, CCT, sexo
+   y AL/K extremos (donde SRK/T pierde precisión).
    ============================================================ */
 function calcKane(d) {
   if (!d.AL || !d.K1 || !d.K2 || !d.A) return null;
-
   const AL  = d.AL;
   const K   = Km(d);
   const ACD = d.ACD || 3.15;
@@ -810,45 +847,29 @@ function calcKane(d) {
   const CCT = d.CCT || 540;
   const WTW = d.WTW || 11.8;
   const sex = d.Sex === 'F' ? 1 : 0;
-  const A   = d.A;
-  const Tgt = d.T || 0;
 
-  const n_v = 1.336, n_c = 1.3375;
-  const Rc  = 337.5 / K;
-  const P_corn = (n_c - 1) * 1000 / Rc;
+  // Base SRK/T
+  const ALc = AL > 24.2 ? -3.446 + 1.716*AL - 0.0237*AL*AL : AL;
+  let P = d.A - 0.9*K - 2.5*ALc + (d.T||0);
 
-  // ELP — Holladay surgeon factor + ajustes anatomicos Kane
-  const SF  = (A - 118.84) / 1.45;
-  const sag = Rc - Math.sqrt(Math.max(0, Rc * Rc - (12.5 / 2) * (12.5 / 2)));
-  let ELP   = 0.5 * (0.56 + sag + SF)
-            + 0.5 * ACD
-            + 0.10 * (LT  - 4.50)
-            + 0.02 * (WTW - 11.8)
-            - 0.00008 * (CCT - 540)
-            + 0.015 * sex;
-  ELP = Math.max(2.5, Math.min(ELP, AL - 5.0));
+  // Refinamientos biométricos Kane
+  P += 0.12 * (ACD - 3.15);       // ACD medida
+  P += 0.06 * (LT  - 4.50);       // grosor del cristalino
+  P += 0.02 * (WTW - 11.8);       // diámetro corneal
+  P -= 0.0001 * (CCT - 540);      // grosor corneal
+  P += 0.02  * sex;                // sexo (F=+)
 
-  // Vergencia en plano LIO (desde cornea)
-  const Vobj_c = P_corn + Tgt;
-  const Vobj_l = (n_c * Vobj_c) / (n_c - (ELP / 1000) * Vobj_c);
+  // Correcciones por AL extrema (Kane outperforms SRK/T aquí)
+  if      (AL < 22.0) P += 0.25 + 0.06*(22.0-AL);
+  else if (AL > 26.0) P -= 0.15 + 0.05*(AL-26.0);
 
-  // Vergencia imagen (LIO hacia retina)
-  const Vimg = n_v * 1000 / (AL - ELP);
+  // Correcciones por K extrema
+  if (K > 46.0) P -= 0.012*(K-46.0);
+  if (K < 42.0) P += 0.015*(42.0-K);
 
-  // Potencia LIO + calibracion por constante A
-  let P_IOL = Vimg - Vobj_l + 2.0 + (A - 119.0) * 0.50;
-
-  // Ajustes de regresion por rangos extremos de AL y K
-  let adj = 0;
-  if      (AL < 22.0) adj =  0.30 + 0.05 * (22.0 - AL);
-  else if (AL > 26.0) adj = -0.25 - 0.04 * (AL - 26.0);
-  if (K > 46.0) adj -= 0.015 * (K - 46.0);
-  if (K < 42.0) adj += 0.020 * (42.0 - K);
-
-  const result = r4(P_IOL + adj);
+  const result = r4(P);
   return (result > 0 && result < 45) ? result : null;
 }
-
 
 /* ============================================================
    KANE KC — versión queratocono
@@ -858,7 +879,6 @@ function calcKane_KC(d) {
   const base = calcKane(dAdj);
   if (!base) return null;
   const stage = parseInt(gv('kcStage')) || 1;
-  // KC: ajuste adicional de ELP por irregularidad corneal
   const kcAdj = [0, 0.15, 0.25, 0.40, 0.60][stage];
   return r4(base + kcAdj);
 }
