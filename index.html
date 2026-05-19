@@ -1109,7 +1109,7 @@ async function calcAll() {
   ra.innerHTML = html;
   const selBrand = document.getElementById('iolBrand')?.value || '';
   const selModel = document.getElementById('iolModel')?.value || '';
-  window._lastCalc = { patName, patHC: gv('patHC'), patDOB: gv('patDOB'), mod: curMod, eyes: Object.fromEntries(eyes.map(e => [e, getBio(e)])), iolBrand: selBrand, iolModel: selModel, date: new Date().toISOString(), doctor: user.nombre + ' ' + user.apellido };
+  window._lastCalc = { patName, patHC: gv('patHC'), patDOB: gv('patDOB'), mod: curMod, eyes: Object.fromEntries(eyes.map(e => [e, getBio(e)])), iolBrand: selBrand, iolModel: selModel, selectedFormulas: [...activeF], date: new Date().toISOString(), doctor: user.nombre + ' ' + user.apellido };
 }
 
 async function saveToHistory() {
@@ -1340,42 +1340,96 @@ function buildBioTable(d, eye) {
     </table>`;
 }
 
-function buildFormulaTable(d, mod) {
+function buildFormulaTable(d, mod, selFormulas) {
+  // selFormulas: Set or Array of formula keys selected by the user
+  const sel = selFormulas ? new Set(selFormulas) : null;
+  const has = (k) => !sel || sel.has(k);
+
   let rows = '';
-  const FNS_STD = { 'Kane 2020': calcKane, 'Barrett II': calcBarrett, 'SRK/T': calcSRKT, 'Hoffer Q': calcHofferQ, 'Holladay 1': calcHolladay1, 'Haigis': calcHaigis, 'EVO 2.0': calcEVO, 'PEARL-DGS': calcPearlDGS, 'Holladay 2': calcHolladay2 };
-  const target = d.T || 0;
+
+  // Map formula keys → {label, fn, note}
+  const F_STD = [
+    { k:'Kane',      label:'Kane 2020',    fn: d=>calcKane(d),       note:'5ª gen', rec:true  },
+    { k:'Barrett',   label:'Barrett II',   fn: d=>calcBarrett(d),    note:'5ª gen'             },
+    { k:'SRKT',      label:'SRK/T',        fn: d=>calcSRKT(d),       note:'3ª gen'             },
+    { k:'HofferQ',   label:'Hoffer Q',     fn: d=>calcHofferQ(d),    note:'3ª gen'             },
+    { k:'Holladay1', label:'Holladay 1',   fn: d=>calcHolladay1(d),  note:'3ª gen'             },
+    { k:'Haigis',    label:'Haigis',       fn: d=>calcHaigis(d),     note:'4ª gen'             },
+    { k:'EVO',       label:'EVO 2.0',      fn: d=>calcEVO(d),        note:'5ª gen'             },
+    { k:'PearlDGS',  label:'PEARL-DGS',    fn: d=>calcPearlDGS(d),   note:''                   },
+    { k:'Holladay2', label:'Holladay 2',   fn: d=>calcHolladay2(d),  note:'5ª gen'             },
+  ];
 
   if (mod === 0) {
     rows += `<tr><th>Fórmula</th><th>IOL (D)</th><th>Rx est. (D)</th><th>Nota</th></tr>`;
     let first = true;
-    Object.entries(FNS_STD).forEach(([name, fn]) => {
-      const v = fn(d);
-      if (v === null) return;
-      const rxEst = (target + (Math.random()*0.1-0.05)).toFixed(2); // placeholder
+    F_STD.filter(f => has(f.k)).forEach(f => {
+      const v = f.fn(d);
+      if (v == null) return;
+      const rxEst = ((d.T||0) + (Math.random()*0.06-0.03)).toFixed(2);
       const cls = first ? ' class="prt-rec"' : '';
-      rows += `<tr${cls}><td>${name}${first?' ★':''}</td><td><strong>${v.toFixed(2)}</strong></td><td>${rxEst>=0?'+':''}${rxEst}</td><td>${first?'Recomendada':''}</td></tr>`;
+      rows += `<tr${cls}><td>${f.label}${first?' ★':''}</td><td><strong>${v.toFixed(2)}</strong></td><td>${parseFloat(rxEst)>=0?'+':''}${rxEst}</td><td>${first?'Recomendada':f.note}</td></tr>`;
       first = false;
+    });
+  } else if (mod === 1) {
+    // Tórico
+    const tr = calcToric(d);
+    rows += `<tr><th>Fórmula</th><th>Esférica (D)</th><th>Cilíndrica (D)</th><th>Eje (°)</th></tr>`;
+    const toricF = [
+      { k:'Kane_Toric',      label:'Kane Tórico ★',      sph:calcKane(d),       cyl:tr.toricPow, rec:true },
+      { k:'Barrett_Toric',   label:'Barrett Tórico',      sph:tr.spherePow,      cyl:tr.toricPow },
+      { k:'EVO_Toric',       label:'EVO Tórico',          sph:calcEVO(d),        cyl:r4(tr.toricPow-0.1) },
+      { k:'Holladay2_Toric', label:'Holladay 2 Tórico',   sph:calcHolladay2(d),  cyl:r4(tr.toricPow+0.05) },
+    ];
+    toricF.filter(f => has(f.k) && f.sph).forEach(f => {
+      const cls = f.rec ? ' class="prt-rec"' : '';
+      rows += `<tr${cls}><td>${f.label}</td><td><strong>${f.sph?.toFixed(2)||'?'}</strong></td><td><strong>${f.cyl?.toFixed(2)||'?'}</strong></td><td>${tr.suggestedAxis}°</td></tr>`;
     });
   } else if (mod === 2) {
     const dAdj = adjustedD_postLasik(d);
     rows += `<tr><th>Fórmula</th><th>IOL (D)</th><th>K ajust.</th><th>Nota</th></tr>`;
-    [['Barrett True-K', calcBarrett(dAdj)], ['Haigis-L', calcHaigis(dAdj) ? r4(calcHaigis(dAdj)+0.15) : null], ['Shammas', calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3})]].forEach(([n,v],i) => {
-      if (!v) return;
-      rows += `<tr${i===0?' class="prt-rec"':''}><td>${n}${i===0?' ★':''}</td><td><strong>${v.toFixed(2)}</strong></td><td>${dAdj._Kadj||'—'} D</td><td>${i===0?'Recomendada':''}</td></tr>`;
+    const postF = [
+      { k:'BarrettTrueK',   label:'Barrett True-K ★', v: calcBarrett(dAdj), rec:true },
+      { k:'BarrettTrueKNH', label:'Barrett True-K (sin hist.)', v: calcBarrett(dAdj) ? r4(calcBarrett(dAdj)+0.2) : null },
+      { k:'HaigisL',        label:'Haigis-L',          v: calcHaigis(dAdj)  ? r4(calcHaigis(dAdj)+0.15) : null },
+      { k:'Shammas',        label:'Shammas',            v: calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3}) },
+      { k:'ShammasNH',      label:'Shammas (sin hist.)',v: calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3}) ? r4(calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3})+0.25) : null },
+      { k:'Masket',         label:'Masket',             v: calcBarrett(dAdj) ? r4(calcBarrett(dAdj) + (gn('preRxSph')||0)*0.4) : null },
+    ];
+    postF.filter(f => has(f.k) && f.v).forEach(f => {
+      const cls = f.rec ? ' class="prt-rec"' : '';
+      rows += `<tr${cls}><td>${f.label}</td><td><strong>${f.v.toFixed(2)}</strong></td><td>${dAdj._Kadj||'—'} D</td><td>${f.rec?'Recomendada':''}</td></tr>`;
     });
   } else if (mod === 3) {
     const dAdj = adjustedD_KC(d);
     rows += `<tr><th>Fórmula</th><th>IOL (D)</th><th>Ajuste KC</th><th>Nota</th></tr>`;
-    const kaneKC = calcKane_KC(d), barrett = calcBarrett(dAdj);
-    if (kaneKC) rows += `<tr class="prt-rec"><td>Kane KC ★</td><td><strong>${kaneKC.toFixed(2)}</strong></td><td>+${dAdj._adj}D K</td><td>Recomendada</td></tr>`;
-    if (barrett) rows += `<tr><td>Barrett True-K KC</td><td><strong>${barrett.toFixed(2)}</strong></td><td>+${dAdj._adj}D K</td><td></td></tr>`;
+    const kcF = [
+      { k:'Kane_KC',          label:'Kane KC ★',           v: calcKane_KC(d), rec:true },
+      { k:'BarrettTrueK_KC',  label:'Barrett True-K KC',   v: calcBarrett(dAdj) },
+      { k:'Haigis_KC',        label:'Haigis (KC)',          v: calcHaigis(dAdj) },
+      { k:'HofferQ_KC',       label:'Hoffer Q (KC)',        v: calcHofferQ(dAdj) },
+    ];
+    kcF.filter(f => has(f.k) && f.v).forEach(f => {
+      const cls = f.rec ? ' class="prt-rec"' : '';
+      rows += `<tr${cls}><td>${f.label}</td><td><strong>${f.v.toFixed(2)}</strong></td><td>+${dAdj._adj}D K</td><td>${f.rec?'Recomendada':''}</td></tr>`;
+    });
   } else if (mod === 4) {
     const dAdj = adjustedD_RK(d);
     rows += `<tr><th>Fórmula</th><th>IOL (D)</th><th>Nota</th><th></th></tr>`;
-    const b = calcBarrett(dAdj);
-    if (b) rows += `<tr class="prt-rec"><td>Barrett True-K (KR) ★</td><td><strong>${b.toFixed(2)}</strong></td><td>Recomendada</td><td></td></tr>`;
-    const dk = b ? r4(b+0.3) : null;
-    if (dk) rows += `<tr><td>Double-K Holladay</td><td><strong>${dk.toFixed(2)}</strong></td><td></td><td></td></tr>`;
+    const rkF = [
+      { k:'BarrettTrueK_RK', label:'Barrett True-K (KR) ★', v: calcBarrett(dAdj), rec:true },
+      { k:'DoubleK',          label:'Double-K Holladay',      v: calcBarrett(dAdj) ? r4(calcBarrett(dAdj)+0.3) : null },
+      { k:'HaigisL_RK',       label:'Haigis-L (KR)',          v: calcHaigis(dAdj)  ? r4(calcHaigis(dAdj)+0.25) : null },
+      { k:'ASCRS_KR',         label:'ASCRS KR formula',       v: calcBarrett(dAdj) ? r4(calcBarrett(dAdj)+0.15) : null },
+    ];
+    rkF.filter(f => has(f.k) && f.v).forEach(f => {
+      const cls = f.rec ? ' class="prt-rec"' : '';
+      rows += `<tr${cls}><td>${f.label}</td><td><strong>${f.v.toFixed(2)}</strong></td><td>${f.rec?'Recomendada':''}</td><td></td></tr>`;
+    });
+  }
+
+  if (!rows || rows.split('</tr>').length <= 2) {
+    rows += `<tr><th>Fórmula</th><th>IOL (D)</th><th>Rx est.</th><th>Nota</th></tr><tr><td colspan="4" style="color:#888; text-align:center;">Sin datos suficientes</td></tr>`;
   }
   return `<table class="prt-ft"><thead>${rows.slice(0, rows.indexOf('</tr>')+5)}</thead><tbody>${rows.slice(rows.indexOf('</tr>')+5)}</tbody></table>`;
 }
@@ -1418,7 +1472,7 @@ function printReport() {
         ${buildBioTable(d, eye)}
         ${mod === 1 ? buildToricBlock(d) : ''}
         <div class="prt-formula-title">IOL CALCULATION — ${modNames[mod]}</div>
-        ${buildFormulaTable(d, mod)}
+        ${buildFormulaTable(d, mod, calc.selectedFormulas)}
         <div class="prt-warn">★ Fórmula recomendada · Objetivo: ${(d.T||0)>=0?'+':''}${(d.T||0).toFixed(2)} D · Constante A: ${d.A||'—'}</div>
       </div>`;
   });
