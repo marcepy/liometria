@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LIOmetría — Calculador de LIO para Oftalmólogos</title>
-<meta name="description" content="Calculador de LIO con inteligencia artificial para oftalmólogos de Paraguay. Módulos: Estándar, Tórico, Post-LASIK/PRK, Queratocono, Queratotomía Radiada. Con IA integrada.">
+<meta name="description" content="Calculador de LIO para oftalmólogos de Paraguay. Módulos: Estándar, Tórico, Post-LASIK/PRK, Queratocono, Queratotomía Radiada. Kane 2020, Barrett, EVO 2.0 y más.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁</text></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -496,7 +496,6 @@
       <div class="card">
         <div class="card-title"><i class="ti ti-calculator"></i> Fórmulas de cálculo <span id="fCtx" style="font-size:11px; color:var(--text2); margin-left:4px; font-weight:400;"></span></div>
         <div class="fgrid" id="formulaGrid"></div>
-        <p style="font-size:11px; color:var(--text2);">La fórmula de IA (primera de la lista) requiere API Key configurada en Mi Perfil. Las demás funcionan sin conexión.</p>
       </div>
 
       <!-- CALCULAR -->
@@ -635,7 +634,7 @@ async function doLogin() {
   // Cargar perfil del médico
   const { data: prof, error: profErr } = await supa.from('medicos').select('*').eq('id', data.user.id).single();
   if (profErr || !prof) { setLoginStatus('No se encontró el perfil. Registrate primero.', 'error'); await supa.auth.signOut(); return; }
-  user = { ...prof, email: data.user.id };
+  user = { ...prof, id: data.user.id, _email: data.user.email };
   setLoginStatus('', '');
   showApp();
 }
@@ -678,7 +677,7 @@ async function initSession() {
   const { data: { session } } = await supa.auth.getSession();
   if (session) {
     const { data: prof } = await supa.from('medicos').select('*').eq('id', session.user.id).single();
-    if (prof) { user = { ...prof, email: session.user.id }; showApp(); }
+    if (prof) { user = { ...prof, id: session.user.id, _email: session.user.email }; showApp(); }
   }
 }
 
@@ -1006,14 +1005,7 @@ function renderEyeResult(eye, d, aiResult) {
     if (diurnal > 1.5) classicRows += `<tr class="warn"><td colspan="4" style="color:#412402"><i class="ti ti-alert-triangle" style="font-size:12px; vertical-align:-1px"></i> Variación diurna de ${diurnal.toFixed(2)}D — inestabilidad refractiva significativa. Considerar mayor margen de objetivo.</td></tr>`;
   }
 
-  if (aiResult && curMod !== 1) {
-    const conf = aiResult.confidence==='high'?'Alta':aiResult.confidence==='medium'?'Media':'Baja';
-    aiRow = `<tr class="rec"><td><i class="ti ti-sparkles" style="font-size:11px"></i> IA ${MOD_NAMES[curMod]!=='Estándar'?MOD_NAMES[curMod]:''} <span class="badge b-rec" style="margin-left:4px">Recomendado</span></td>
-      <td style="font-weight:600">${aiResult.recommended_power?.toFixed(2)||'?'} D</td>
-      <td>${aiResult.adj_K?'K ajust. '+aiResult.adj_K.toFixed(2)+' D':'IA + óptica + regresión'}</td>
-      <td style="font-size:11px">${conf}</td></tr>`;
-    aiBox = `<div class="ai-box"><p><i class="ti ti-sparkles" style="font-size:11px"></i> <strong>${aiResult.notes||''}</strong><br>Rango: ${aiResult.power_range?aiResult.power_range[0]+' – '+aiResult.power_range[1]+' D':'?'} · Rx est.: ${(aiResult.predicted_ref||0)>=0?'+':''}${aiResult.predicted_ref?.toFixed(2)||'?'} D</p></div>`;
-  }
+
 
   const note = MOD_NOTES[curMod](d.AL || 23.5);
 
@@ -1049,7 +1041,7 @@ async function calcAll() {
   const eyes = eyeSel === 'both' ? ['OD','OI'] : [eyeSel];
   const ctxKeys = ['standard','toric','postLasik','kc','rk'];
   const ra = document.getElementById('resultsArea');
-  ra.innerHTML = '<div class="loading"><div class="spinner"></div> Calculando con IA y fórmulas clásicas...</div>';
+  ra.innerHTML = '<div class="loading"><div class="spinner"></div> Calculando...</div>';
 
   let html = `<div style="margin-top:.75rem;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
@@ -1098,31 +1090,95 @@ async function saveToHistory() {
 /* ============================================================
    HISTORIAL — SUPABASE
    ============================================================ */
-async function renderHistory() {
+// Cache del historial para loadFromHistory
+let _histCache = [];
+renderHistory = async function() {
   const el = document.getElementById('histList'); if (!el || !user) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando historial...</div>';
   const { data, error } = await supa.from('calculos')
-    .select('*')
-    .eq('medico_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(100);
+    .select('*').eq('medico_id', user.id)
+    .order('created_at', { ascending: false }).limit(100);
   if (error) { el.innerHTML = '<p style="color:#993C1D; font-size:12px;">Error al cargar historial.</p>'; return; }
+  _histCache = data || [];
   if (!data.length) { el.innerHTML = '<p style="color:var(--text2); font-size:12px;">No hay cálculos guardados aún.</p>'; return; }
   el.innerHTML = data.map(h => `
-    <div style="border:.5px solid var(--border); border-radius:var(--radius); padding:9px 12px; margin-bottom:7px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-      <div>
-        <p style="font-size:12px; font-weight:600;">${h.paciente_nombre||'Paciente'} ${h.paciente_hc?'· '+h.paciente_hc:''}</p>
-        <p style="font-size:11px; color:var(--text2);">${new Date(h.created_at).toLocaleDateString('es-PY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
-      </div>
-      <div style="display:flex; gap:4px; flex-wrap:wrap;">
-        ${h.modulo!=null?`<span class="badge ${MOD_BADGES[h.modulo]}">${MOD_NAMES[h.modulo]}</span>`:''}
-        ${h.datos_od?.AL?`<span class="badge" style="background:#E1F5EE;color:#085041;border-color:#5DCAA5">OD ${h.datos_od.AL}mm</span>`:''}
-        ${h.datos_oi?.AL?`<span class="badge" style="background:#FAECE7;color:#4A1B0C;border-color:#F0997B">OI ${h.datos_oi.AL}mm</span>`:''}
-        <button onclick="deleteCalc(${h.id}, this)" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:2px 6px;" title="Eliminar">
-          <i class="ti ti-trash" style="font-size:13px"></i>
-        </button>
+    <div style="border:.5px solid var(--border); border-radius:var(--radius); padding:9px 12px; margin-bottom:7px; cursor:pointer; transition:background .15s;"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"
+      onclick="loadFromHistory(${h.id})">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+        <div>
+          <p style="font-size:12px; font-weight:600;">${h.paciente_nombre||'Paciente'} ${h.paciente_hc?'· '+h.paciente_hc:''}</p>
+          <p style="font-size:11px; color:var(--text2);">${new Date(h.created_at).toLocaleDateString('es-PY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})} &nbsp;·&nbsp; <span style="color:var(--blue)">Clic para cargar</span></p>
+        </div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+          ${h.modulo!=null?`<span class="badge ${MOD_BADGES[h.modulo]}">${MOD_NAMES[h.modulo]}</span>`:''}
+          ${h.datos_od?.AL?`<span class="badge" style="background:#E1F5EE;color:#085041;border-color:#5DCAA5">OD ${h.datos_od.AL}mm</span>`:''}
+          ${h.datos_oi?.AL?`<span class="badge" style="background:#FAECE7;color:#4A1B0C;border-color:#F0997B">OI ${h.datos_oi.AL}mm</span>`:''}
+          <button onclick="event.stopPropagation(); deleteCalc(${h.id}, this)"
+            style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:2px 6px;" title="Eliminar">
+            <i class="ti ti-trash" style="font-size:13px"></i>
+          </button>
+        </div>
       </div>
     </div>`).join('');
+};
+
+function loadFromHistory(id) {
+  const h = _histCache.find(x => x.id === id);
+  if (!h) return;
+
+  // Ir al tab de calcular
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('calcTab').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nav-btn').classList.add('active');
+
+  // Setear módulo
+  setMod(h.modulo || 0);
+
+  // Llenar datos del paciente
+  const setV = (id, val) => { const el = document.getElementById(id); if(el && val!=null) el.value = val; };
+  setV('patName', h.paciente_nombre);
+  setV('patHC',   h.paciente_hc);
+  if (h.paciente_dob) setV('patDOB', h.paciente_dob.slice(0,10));
+
+  // Llenar biometría OD
+  const od = h.datos_od;
+  if (od) {
+    setV('OD_AL',   od.AL);   setV('OD_K1',  od.K1);  setV('OD_K2', od.K2);
+    setV('OD_Kaxis',od.Kaxis);setV('OD_ACD', od.ACD); setV('OD_LT', od.LT);
+    setV('OD_CCT',  od.CCT);  setV('OD_WTW', od.WTW); setV('OD_A',  od.A);
+    setV('OD_T',    od.T);
+    const sexEl = document.getElementById('OD_Sex');
+    if (sexEl && od.Sex) sexEl.value = od.Sex;
+  }
+
+  // Llenar biometría OI
+  const oi = h.datos_oi;
+  if (oi) {
+    setV('OI_AL',   oi.AL);   setV('OI_K1',  oi.K1);  setV('OI_K2', oi.K2);
+    setV('OI_Kaxis',oi.Kaxis);setV('OI_ACD', oi.ACD); setV('OI_LT', oi.LT);
+    setV('OI_CCT',  oi.CCT);  setV('OI_WTW', oi.WTW); setV('OI_A',  oi.A);
+    setV('OI_T',    oi.T);
+    const sexEl = document.getElementById('OI_Sex');
+    if (sexEl && oi.Sex) sexEl.value = oi.Sex;
+  }
+
+  // Determinar ojo activo
+  if (od?.AL && !oi?.AL) swEye('OD');
+  else if (oi?.AL && !od?.AL) swEye('OI');
+  else swEye('OD');
+
+  // Ajustar selector de ojo
+  const eyeSel = document.getElementById('eyeSel');
+  if (eyeSel) {
+    if (od?.AL && oi?.AL) eyeSel.value = 'both';
+    else if (od?.AL) eyeSel.value = 'OD';
+    else eyeSel.value = 'OI';
+  }
+
+  // Scroll al inicio
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function deleteCalc(id, btn) {
@@ -1138,6 +1194,8 @@ async function deleteCalc(id, btn) {
    ============================================================ */
 function renderProfile() {
   const el = document.getElementById('profContent'); if (!el || !user) return;
+  // Recuperar email real de Supabase Auth
+  const realEmail = user._email || user.email || '—';
   el.innerHTML = `
     <div class="g2" style="gap:10px; margin-bottom:.75rem;">
       <div class="field"><label>Nombre</label><input type="text" id="pN" value="${user.nombre}"></div>
@@ -1148,13 +1206,24 @@ function renderProfile() {
       <div class="field"><label>Institución</label><input type="text" id="pI" value="${user.institucion||''}"></div>
     </div>
     <div class="field" style="margin-bottom:.75rem;">
-      <label>Correo electrónico</label>
-      <input value="${user.nombre}@liometria" readonly style="background:var(--bg2);">
+      <label>Correo electrónico (no editable)</label>
+      <input value="${realEmail}" readonly style="background:var(--bg2); color:var(--text2);">
     </div>
-    <div class="btn-row">
-      <button class="btn btn-p" onclick="saveProfile()"><i class="ti ti-device-floppy"></i> Guardar cambios</button>
+    <div class="btn-row" style="margin-bottom:1rem;">
+      <button class="btn btn-p" onclick="saveProfile()"><i class="ti ti-device-floppy"></i> Guardar datos</button>
     </div>
-    <div id="profStatus" style="margin-top:.5rem; font-size:12px;"></div>`;
+    <div id="profStatus" style="margin-bottom:.75rem; font-size:12px;"></div>
+    <div style="border-top:.5px solid var(--border); padding-top:.75rem; margin-top:.25rem;">
+      <p style="font-size:12px; font-weight:600; color:var(--text); margin-bottom:.75rem;"><i class="ti ti-lock" style="font-size:14px; vertical-align:-2px; color:var(--blue)"></i> Cambiar contraseña</p>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:.75rem;">
+        <div class="field"><label>Nueva contraseña</label><input type="password" id="pPass1" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+        <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="pPass2" placeholder="Repetí la contraseña" autocomplete="new-password"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="changePassword()"><i class="ti ti-key"></i> Cambiar contraseña</button>
+      </div>
+      <div id="passStatus" style="margin-top:.5rem; font-size:12px;"></div>
+    </div>`;
 }
 
 async function saveProfile() {
@@ -1164,9 +1233,26 @@ async function saveProfile() {
     matricula: user.matricula, institucion: user.institucion
   }).eq('id', user.id);
   const st = document.getElementById('profStatus');
-  if (error) { if(st) st.innerHTML = '<span style="color:#993C1D">Error al guardar.</span>'; return; }
+  if (error) { if(st) st.innerHTML = '<span style="color:#993C1D"><i class="ti ti-x"></i> Error al guardar.</span>'; return; }
   document.getElementById('docBadge').textContent = `Dr. ${user.nombre} ${user.apellido} · ${user.matricula}`;
-  if(st) st.innerHTML = '<span style="color:#27500A"><i class="ti ti-check"></i> Perfil actualizado.</span>';
+  if(st) st.innerHTML = '<span style="color:#27500A"><i class="ti ti-check"></i> Datos actualizados correctamente.</span>';
+  setTimeout(() => { if(st) st.innerHTML = ''; }, 3000);
+}
+
+async function changePassword() {
+  const p1 = document.getElementById('pPass1')?.value || '';
+  const p2 = document.getElementById('pPass2')?.value || '';
+  const st = document.getElementById('passStatus');
+  if (!p1) { if(st) st.innerHTML = '<span style="color:#993C1D">Ingresá la nueva contraseña.</span>'; return; }
+  if (p1.length < 6) { if(st) st.innerHTML = '<span style="color:#993C1D">La contraseña debe tener al menos 6 caracteres.</span>'; return; }
+  if (p1 !== p2) { if(st) st.innerHTML = '<span style="color:#993C1D"><i class="ti ti-x"></i> Las contraseñas no coinciden.</span>'; return; }
+  if(st) st.innerHTML = '<span class="spinner"></span> Actualizando...';
+  const { error } = await supa.auth.updateUser({ password: p1 });
+  if (error) { if(st) st.innerHTML = `<span style="color:#993C1D"><i class="ti ti-x"></i> Error: ${error.message}</span>`; return; }
+  document.getElementById('pPass1').value = '';
+  document.getElementById('pPass2').value = '';
+  if(st) st.innerHTML = '<span style="color:#27500A"><i class="ti ti-check"></i> Contraseña cambiada correctamente.</span>';
+  setTimeout(() => { if(st) st.innerHTML = ''; }, 3000);
 }
 
 /* ============================================================
