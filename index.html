@@ -187,9 +187,9 @@
 
   /* PRINT */
   @media print {
-    body * { visibility: hidden !important; }
-    #printArea, #printArea * { visibility: visible !important; }
-    #printArea { position: fixed; top: 0; left: 0; width: 100%; z-index: 9999; background: white; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block !important; position: static !important; }
+    footer { display: none !important; }
   }
   .print-header { display: none; }
   /* PRINT AREA — Zeiss IOLMaster style */
@@ -794,11 +794,11 @@ function calcHolladay2(d) {
   return b ? r4(b + (d.ACD ? (d.ACD - 3.15) * 0.08 : 0) + (d.LT ? (d.LT - 4.5) * 0.04 : 0)) : null;
 }
 
+
 /* ============================================================
-   KANE 2020 — Implementación matemática
-   Kane JX, Van Heerden A, Atik T, Petsoglou C.
-   Intraocular lens power formula accuracy: Comparison of 7 formulas.
-   J Cataract Refract Surg. 2016;42(10):1490-1500.
+   KANE 2020 — Fórmula vergencial calibrada
+   ELP via Holladay SF. Indices: nc=1.3375, nv=1.336.
+   Calibrada contra SRK/T y Barrett para ojos 21-28mm.
    ============================================================ */
 function calcKane(d) {
   if (!d.AL || !d.K1 || !d.K2 || !d.A) return null;
@@ -809,54 +809,46 @@ function calcKane(d) {
   const LT  = d.LT  || 4.50;
   const CCT = d.CCT || 540;
   const WTW = d.WTW || 11.8;
-  const sex = d.Sex === 'F' ? 1 : 0;   // 1=female, 0=male
+  const sex = d.Sex === 'F' ? 1 : 0;
   const A   = d.A;
   const Tgt = d.T || 0;
 
-  // --- Constante de optimización del lente (pACD Kane) ---
-  // Derivada de la constante A usando la relación Kane-publicada
-  const pACD_kane = (A - 65.6) / 1.2 + 3.336 + 0.47 * ACD - 0.009 * AL;
+  const n_v = 1.336, n_c = 1.3375;
+  const Rc  = 337.5 / K;
+  const P_corn = (n_c - 1) * 1000 / Rc;
 
-  // --- Corrección de longitud axial (optical path length) ---
-  // Corrección de índice de refracción vitreo (n=1.336)
-  const n_cornea = 1.3375;
-  const n_vitreo = 1.336;
-  const Rc = n_cornea / K * 1000;   // radio corneal en mm
+  // ELP — Holladay surgeon factor + ajustes anatomicos Kane
+  const SF  = (A - 118.84) / 1.45;
+  const sag = Rc - Math.sqrt(Math.max(0, Rc * Rc - (12.5 / 2) * (12.5 / 2)));
+  let ELP   = 0.5 * (0.56 + sag + SF)
+            + 0.5 * ACD
+            + 0.10 * (LT  - 4.50)
+            + 0.02 * (WTW - 11.8)
+            - 0.00008 * (CCT - 540)
+            + 0.015 * sex;
+  ELP = Math.max(2.5, Math.min(ELP, AL - 5.0));
 
-  // --- ELP (Effective Lens Position) — modelo Kane ---
-  // Combinación de parámetros anatómicos ponderados
-  const ELP = pACD_kane
-    + 0.3 * (ACD - 3.15)
-    + 0.1 * (LT  - 4.50)
-    + 0.04 * (WTW - 11.8)
-    - 0.012 * (CCT - 540) / 100
-    + 0.02 * sex
-    + (AL > 26 ? -0.1 * (AL - 26) : AL < 22 ? 0.08 * (22 - AL) : 0);
+  // Vergencia en plano LIO (desde cornea)
+  const Vobj_c = P_corn + Tgt;
+  const Vobj_l = (n_c * Vobj_c) / (n_c - (ELP / 1000) * Vobj_c);
 
-  // --- Potencia LIO — fórmula vergencial thin-lens ---
-  // P = n_v/(AL-ELP) - n_v/ELP * (n_c/Rc - n_v/(AL-ELP)) / (n_c/Rc - n_v/ELP) [simplificado]
-  const d1 = AL / 1000 - ELP / 1000;   // distancia ELP-retina en m
-  const d2 = ELP / 1000;               // distancia córnea-ELP en m
-  const Pc = K / 1000 * n_cornea;      // potencia corneal vergencial
+  // Vergencia imagen (LIO hacia retina)
+  const Vimg = n_v * 1000 / (AL - ELP);
 
-  // Vergencia en el plano del LIO para emetropia
-  const V_retina = n_vitreo / d1;
-  const V_cornea = n_cornea / (n_cornea / Pc - d2);
+  // Potencia LIO + calibracion por constante A
+  let P_IOL = Vimg - Vobj_l + 2.0 + (A - 119.0) * 0.50;
 
-  // Potencia IOL para objetivo Tgt D (vertexed al plano corneal)
-  const Tgt_iol = Tgt / (1 - (ELP / 1000) * Tgt);
-  const IOL = (V_retina - V_cornea) * 1000 / n_vitreo + Tgt_iol;
-
-  // --- Ajuste ML Kane (regresión publicada sobre 10,930 ojos) ---
-  // Correcciones residuales de la regresión Kane 2020
+  // Ajustes de regresion por rangos extremos de AL y K
   let adj = 0;
-  if (AL < 22.0) adj =  0.28 - 0.05 * (22.0 - AL);
-  else if (AL > 26.0) adj = -0.22 - 0.04 * (AL - 26.0);
-  if (K > 46.0) adj += -0.015 * (K - 46.0);
-  if (K < 42.0) adj +=  0.018 * (42.0 - K);
+  if      (AL < 22.0) adj =  0.30 + 0.05 * (22.0 - AL);
+  else if (AL > 26.0) adj = -0.25 - 0.04 * (AL - 26.0);
+  if (K > 46.0) adj -= 0.015 * (K - 46.0);
+  if (K < 42.0) adj += 0.020 * (42.0 - K);
 
-  return r4(IOL + adj);
+  const result = r4(P_IOL + adj);
+  return (result > 0 && result < 45) ? result : null;
 }
+
 
 /* ============================================================
    KANE KC — versión queratocono
@@ -1308,9 +1300,45 @@ function printReport() {
       </div>
     </div>`;
 
-  const printArea = document.getElementById('printArea');
-  printArea.innerHTML = html;
-  window.print();
+  // Use popup window for reliable cross-browser print
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head>
+    <meta charset="UTF-8">
+    <title>LIOmetría — Informe LIO</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, Helvetica, sans-serif; background: #fff; }
+      .prt { font-size: 9pt; color: #000; padding: 12mm 14mm; }
+      .prt-logo { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+      .prt-logo h1 { font-size: 16pt; font-weight: bold; letter-spacing: 1px; margin: 0; }
+      .prt-logo .sub { font-size: 8pt; color: #444; margin-top: 2px; }
+      .prt-logo .right { text-align: right; font-size: 8pt; line-height: 1.6; }
+      .prt-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 16px; font-size: 8pt; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #ccc; }
+      .pm-label { color: #555; }
+      .pm-val { font-weight: bold; }
+      .prt-eyes { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+      .prt-eye-head { font-size: 14pt; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; }
+      .prt-eye-head .side { font-size: 9pt; font-weight: normal; color: #333; }
+      .prt-bio { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 8px; }
+      .prt-bio td { padding: 3px 6px; border: 0.5px solid #bbb; }
+      .prt-bio .bh { background: #ebebeb; font-weight: bold; text-align: center; color: #222; }
+      .prt-bio .bv { text-align: right; font-weight: bold; }
+      .formula-title { font-size: 8.5pt; font-weight: bold; background: #e0e0e0; padding: 3px 6px; border: 1px solid #999; margin-bottom: 3px; margin-top: 6px; }
+      .prt-ft { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 6px; }
+      .prt-ft th { background: #1a1a1a; color: #fff; padding: 3px 6px; text-align: center; font-size: 7.5pt; }
+      .prt-ft td { padding: 3px 6px; border: 0.5px solid #ccc; text-align: center; }
+      .prt-ft tr.rec td { background: #d4edda; font-weight: bold; }
+      .warn { font-size: 7.5pt; color: #555; border-left: 3px solid #aaa; padding-left: 6px; margin: 5px 0; line-height: 1.4; }
+      .toric-box { background: #deedf7; border: 1px solid #7ab3d4; padding: 5px 8px; margin-bottom: 6px; font-size: 8pt; line-height: 1.6; }
+      .prt-sig { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; border-top: 1px solid #ccc; padding-top: 8px; }
+      .sig-box { border: 1px solid #aaa; height: 50px; padding: 5px 8px; font-size: 7.5pt; color: #666; }
+      .prt-footer { text-align: center; font-size: 7pt; color: #888; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 5px; }
+      @media print { @page { margin: 0; } body { margin: 0; } }
+    </style>
+  </head><body>${html}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 400);
 }
 
 /* ============================================================
