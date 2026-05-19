@@ -363,7 +363,11 @@
             <div class="field"><label>K2 curva <span class="u">D</span></label><input type="number" step=".01" id="OD_K2" placeholder="44.25" min="35" max="55"></div>
           </div>
           <div class="g3" style="margin-bottom:9px;">
-            <div class="field"><label>Eje K2 <span class="u">°</span></label><input type="number" step="1" id="OD_Kaxis" placeholder="90" min="1" max="180"></div>
+            <div class="field">
+              <label>Eje K2 — meridiano curvo <span class="u">°</span></label>
+              <input type="number" step="1" id="OD_Kaxis" placeholder="90" min="1" max="180" oninput="updateK1Axis('OD',this.value)">
+              <span id="OD_K1axisHint" style="font-size:10px; color:var(--text3);"></span>
+            </div>
             <div class="field"><label>ACD <span class="u">mm</span></label><input type="number" step=".01" id="OD_ACD" placeholder="3.15" min="1.5" max="5"></div>
             <div class="field"><label>LT <span class="u">mm</span></label><input type="number" step=".01" id="OD_LT" placeholder="4.50" min="2" max="7"></div>
           </div>
@@ -386,7 +390,11 @@
             <div class="field"><label>K2 curva <span class="u">D</span></label><input type="number" step=".01" id="OI_K2" placeholder="44.25" min="35" max="55"></div>
           </div>
           <div class="g3" style="margin-bottom:9px;">
-            <div class="field"><label>Eje K2 <span class="u">°</span></label><input type="number" step="1" id="OI_Kaxis" placeholder="90" min="1" max="180"></div>
+            <div class="field">
+              <label>Eje K2 — meridiano curvo <span class="u">°</span></label>
+              <input type="number" step="1" id="OI_Kaxis" placeholder="90" min="1" max="180" oninput="updateK1Axis('OI',this.value)">
+              <span id="OI_K1axisHint" style="font-size:10px; color:var(--text3);"></span>
+            </div>
             <div class="field"><label>ACD <span class="u">mm</span></label><input type="number" step=".01" id="OI_ACD" placeholder="3.15" min="1.5" max="5"></div>
             <div class="field"><label>LT <span class="u">mm</span></label><input type="number" step=".01" id="OI_LT" placeholder="4.50" min="2" max="7"></div>
           </div>
@@ -1315,16 +1323,21 @@ async function changePassword() {
 function buildBioTable(d, eye) {
   const K = Km(d).toFixed(2);
   const astig = d.K2 && d.K1 ? Math.abs(d.K2 - d.K1).toFixed(2) : '—';
+  // Kaxis = eje de K2 (meridiano más curvo). K1 está perpendicular = (Kaxis + 90) % 180
+  const axisK2 = d.Kaxis || null;
+  const axisK1 = axisK2 ? ((axisK2 + 90 - 1) % 180) + 1 : null;
+  const k1str = `${d.K1||'—'} D${axisK1 ? ' @ '+axisK1+'°' : ''}`;
+  const k2str = `${d.K2||'—'} D${axisK2 ? ' @ '+axisK2+'°' : ''}`;
   return `
     <table class="prt-bio">
       <tr>
         <td class="bh">AL</td><td class="bv">${d.AL||'—'} mm</td>
-        <td class="bh">K1</td><td class="bv">${d.K1||'—'} D @ ${d.Kaxis?d.Kaxis+'°':'—'}</td>
+        <td class="bh">K1 (plana)</td><td class="bv">${k1str}</td>
         <td class="bh">ACD</td><td class="bv">${d.ACD||'—'} mm</td>
       </tr>
       <tr>
         <td class="bh">LT</td><td class="bv">${d.LT||'—'} mm</td>
-        <td class="bh">K2</td><td class="bv">${d.K2||'—'} D</td>
+        <td class="bh">K2 (curva)</td><td class="bv">${k2str}</td>
         <td class="bh">CCT</td><td class="bv">${d.CCT||'—'} µm</td>
       </tr>
       <tr>
@@ -1726,6 +1739,15 @@ function buildAvailabilityBlock(calcResult, iol) {
         <span style="color:var(--text3)">Pasos: ${av.paso} D</span>
       </div>
     </div>`;
+}
+
+function updateK1Axis(eye, val) {
+  const hint = document.getElementById(eye + '_K1axisHint');
+  if (!hint) return;
+  const v = parseInt(val);
+  if (!v || v < 1 || v > 180) { hint.textContent = ''; return; }
+  const k1axis = ((v + 90 - 1) % 180) + 1;
+  hint.textContent = '→ K1 (plana) queda a ' + k1axis + '°';
 }
 
 // INIT
