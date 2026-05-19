@@ -1380,9 +1380,15 @@ function buildFormulaTable(d, mod, selFormulas) {
     F_STD.filter(f => has(f.k)).forEach(f => {
       const v = f.fn(d);
       if (v == null) return;
-      const rxEst = ((d.T||0) + (Math.random()*0.06-0.03)).toFixed(2);
+      // Rx residual = diferencia entre potencia exacta y potencia redondeada implantada
+      // convertida al plano corneal. Factor vertex ≈ 0.7 (ELP ~4-5mm)
+      // P_implantada = r2(v) [0.5D steps]; Rx = (v - r2(v)) × 0.7 + objetivo
+      const P_impl = r2(v);
+      const vertexFactor = 0.71;  // 1/(1 - 4.5/1000 * 22) ≈ 0.71 para ojo típico
+      const rxResidual = ((v - P_impl) * vertexFactor + (d.T||0));
+      const rxEst = rxResidual.toFixed(2);
       const cls = first ? ' class="prt-rec"' : '';
-      rows += `<tr${cls}><td>${f.label}${first?' ★':''}</td><td><strong>${r2(v).toFixed(1)}</strong></td><td>${parseFloat(rxEst)>=0?'+':''}${rxEst}</td><td>${first?'Recomendada':f.note}</td></tr>`;
+      rows += `<tr${cls}><td>${f.label}${first?' ★':''}</td><td><strong>${P_impl.toFixed(1)}</strong></td><td>${parseFloat(rxEst)>=0?'+':''}${rxEst}</td><td>${first?'Recomendada':f.note}</td></tr>`;
       first = false;
     });
   } else if (mod === 1) {
