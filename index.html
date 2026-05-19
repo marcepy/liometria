@@ -326,6 +326,30 @@
       </div>
 
       <!-- BIOMETRÍA -->
+      <!-- SELECTOR DE LIO -->
+      <div class="card" id="iolSelectorCard">
+        <div class="card-title"><i class="ti ti-eye-cog"></i> Selección de LIO</div>
+        <div class="g3" style="margin-bottom:8px;">
+          <div class="field">
+            <label>Fabricante</label>
+            <select id="iolBrand" onchange="filterIOLs()">
+              <option value="">— Seleccionar fabricante —</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Modelo de LIO</label>
+            <select id="iolModel" onchange="applyIOL()">
+              <option value="">— Seleccionar modelo —</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Tipo</label>
+            <input type="text" id="iolType" readonly style="background:var(--bg2); font-size:12px;" placeholder="—">
+          </div>
+        </div>
+        <div id="iolInfo" style="display:none; background:var(--bg2); border-radius:var(--radius); padding:8px 12px; font-size:11px; color:var(--text2); line-height:1.7;"></div>
+      </div>
+
       <div class="card">
         <div class="card-title"><i class="ti ti-ruler-measure"></i> Biometría ocular</div>
         <div class="etabs">
@@ -959,12 +983,21 @@ function renderEyeResult(eye, d, aiResult) {
   }
   else if (curMod === 1) {
     const tr = calcToric(d);
+    // Find nearest available toric cyl power
+    const selIOL = getSelectedIOL();
+    let cylAvailStr = '';
+    if (selIOL && selIOL.torico && selIOL.cyl_lio) {
+      const netCylVal = tr.toricPow;
+      const nearest = selIOL.cyl_lio.reduce((a,b) => Math.abs(b-netCylVal)<Math.abs(a-netCylVal)?b:a);
+      cylAvailStr = `<span style="color:var(--blue)">Cil. LIO disponible: <strong>${nearest.toFixed(2)} D</strong> (pasos de ${selIOL.paso_cyl}D)</span>`;
+    }
     toricBlock = `<div class="toric-box"><p style="font-weight:600; margin-bottom:4px"><i class="ti ti-rotate-clockwise" style="font-size:12px"></i> Cálculo vectorial tórico (Barrett + ACP)</p>
       <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:4px; font-size:12px;">
         <span>Cil. corneal neto: <strong>${tr.netCyl.toFixed(2)} D</strong></span>
         <span>Potencia tórica LIO: <strong>${tr.toricPow.toFixed(2)} D cil.</strong></span>
         <span>Eje implantación: <strong>${tr.suggestedAxis}°</strong></span>
         ${tr.spherePow ? `<span>Esférica equiv.: <strong>${tr.spherePow.toFixed(2)} D</strong></span>` : ''}
+        ${cylAvailStr}
       </div></div>`;
     if (aiResult) {
       aiRow = `<tr class="rec"><td><i class="ti ti-sparkles" style="font-size:11px"></i> IA Tórico <span class="badge b-rec" style="margin-left:4px">Recomendado</span></td>
@@ -1029,6 +1062,15 @@ function renderEyeResult(eye, d, aiResult) {
     </table>
     ${aiBox}
     <div class="warn-box"><i class="ti ti-info-circle" style="font-size:12px; vertical-align:-1px"></i> ${note}</div>
+    ${buildAvailabilityBlock((() => {
+      // Get best calculated power for availability check
+      if (curMod === 0) return calcKane(d) || calcBarrett(d);
+      if (curMod === 1) { const tr = calcToric(d); return tr.spherePow; }
+      if (curMod === 2) return calcBarrett(adjustedD_postLasik(d));
+      if (curMod === 3) return calcKane_KC(d);
+      if (curMod === 4) return calcBarrett(adjustedD_RK(d));
+      return null;
+    })(), getSelectedIOL())}
   </div>`;
 }
 
@@ -1065,7 +1107,9 @@ async function calcAll() {
 
   html += `<p style="font-size:11px; color:var(--text3); margin-top:8px; text-align:center;">Los resultados son orientativos. La responsabilidad clínica es exclusiva del médico tratante. · LIOmetría v1.0</p></div>`;
   ra.innerHTML = html;
-  window._lastCalc = { patName, patHC: gv('patHC'), patDOB: gv('patDOB'), mod: curMod, eyes: Object.fromEntries(eyes.map(e => [e, getBio(e)])), date: new Date().toISOString(), doctor: user.nombre + ' ' + user.apellido };
+  const selBrand = document.getElementById('iolBrand')?.value || '';
+  const selModel = document.getElementById('iolModel')?.value || '';
+  window._lastCalc = { patName, patHC: gv('patHC'), patDOB: gv('patDOB'), mod: curMod, eyes: Object.fromEntries(eyes.map(e => [e, getBio(e)])), iolBrand: selBrand, iolModel: selModel, date: new Date().toISOString(), doctor: user.nombre + ' ' + user.apellido };
 }
 
 async function saveToHistory() {
@@ -1177,6 +1221,16 @@ function loadFromHistory(id) {
     else eyeSel.value = 'OI';
   }
 
+  // Restaurar LIO seleccionado
+  if (h.iolBrand && h.iolModel) {
+    const brandSel = document.getElementById('iolBrand');
+    if (brandSel) {
+      brandSel.value = h.iolBrand;
+      filterIOLs();
+      const modelSel = document.getElementById('iolModel');
+      if (modelSel) { modelSel.value = h.iolModel; applyIOL(); }
+    }
+  }
   // Scroll al inicio
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1393,7 +1447,7 @@ function printReport() {
         <div><span class="pm-label">HC / Cédula: </span><span class="pm-val">${calc.patHC||'—'}</span></div>
         <div><span class="pm-label">Médico: </span><span class="pm-val">Dr. ${user?.nombre||''} ${user?.apellido||''}</span></div>
         <div><span class="pm-label">Matrícula: </span><span class="pm-val">${user?.matricula||'—'}</span></div>
-        <div><span class="pm-label">Institución: </span><span class="pm-val">${user?.institucion||'—'}</span></div>
+        <div><span class="pm-label">LIO seleccionado: </span><span class="pm-val">${calc.iolModel||'No especificado'}</span></div>
       </div>
       <div class="prt-eyes">${eyeBlocks}</div>
       <div class="prt-sig">
@@ -1469,8 +1523,160 @@ document.getElementById('rkRxPM')?.addEventListener('input', () => {
   const el = document.getElementById('rkDiurnal'); if(el) el.value = Math.abs(pm-am).toFixed(2);
 });
 
+/* ============================================================
+   BASE DE DATOS DE LIOs
+   Constantes A: fuente ULIB / datos de fabricante (2024)
+   Saltos: esférico 0.5D | cilíndrico tórico 0.25D
+   ============================================================ */
+const IOL_DB = {
+  "Alcon": {
+    "AcrySof IQ SN60WF": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.0,acd:5.73,rango:[6,30],paso:0.5,torico:false,notas:"Referencia mundial monofocal" },
+    "AcrySof IQ Toric SN6AT": { tipo:"Tórico",material:"Acrílico hidrofóbico",A:119.0,acd:5.73,rango:[6,30],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.25,3.00,3.75,4.50,5.25,6.00],notas:"T2(1.5D)→T9(6.0D) en plano LIO" },
+    "AcrySof IQ PanOptix TFNT00": { tipo:"Trifocal",material:"Acrílico hidrofóbico",A:119.0,acd:5.73,rango:[6,30],paso:0.5,torico:false,notas:"+2.17D / +3.25D adds" },
+    "AcrySof IQ PanOptix Toric TFNT": { tipo:"Trifocal tórico",material:"Acrílico hidrofóbico",A:119.0,acd:5.73,rango:[6,30],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.25,3.00,3.75,4.50,5.25,6.00],notas:"Trifocal tórico" },
+    "Clareon Monofocal CNA0T0": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.1,acd:5.74,rango:[6,30],paso:0.5,torico:false,notas:"Nueva plataforma Clareon (2020)" },
+    "Clareon Toric": { tipo:"Tórico",material:"Acrílico hidrofóbico",A:119.1,acd:5.74,rango:[6,30],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.25,3.00,3.75,4.50,5.25,6.00],notas:"Plataforma Clareon tórico" }
+  },
+  "Johnson & Johnson": {
+    "Tecnis 1-Piece ZCB00": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.3,acd:5.77,rango:[5,34],paso:0.5,torico:false,notas:"Alto rango — excelente para ojos largos" },
+    "Tecnis Toric 1-Piece ZCT": { tipo:"Tórico",material:"Acrílico hidrofóbico",A:119.3,acd:5.77,rango:[5,34],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.25,3.00,3.75,4.50,5.25,6.00],notas:"ZCT150→ZCT600" },
+    "Tecnis Symfony ZXR00": { tipo:"EDOF",material:"Acrílico hidrofóbico",A:119.3,acd:5.77,rango:[5,34],paso:0.5,torico:false,notas:"Extended Depth of Focus" },
+    "Tecnis Multifocal ZMB00": { tipo:"Multifocal bifocal",material:"Acrílico hidrofóbico",A:119.3,acd:5.77,rango:[5,34],paso:0.5,torico:false,notas:"+4.00D add difractivo" }
+  },
+  "Carl Zeiss": {
+    "CT LUCIA 621P": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.0,acd:5.72,rango:[0,32],paso:0.5,torico:false,notas:"Haigis a0=1.31 a1=0.40 a2=0.10" },
+    "CT LUCIA 611P": { tipo:"Monofocal esférica",material:"Acrílico hidrofóbico",A:118.8,acd:5.68,rango:[0,32],paso:0.5,torico:false,notas:"Versión esférica CT LUCIA" },
+    "CT ASPHINA 409MP": { tipo:"Monofocal asférica",material:"Acrílico hidrofílico",A:118.6,acd:5.64,rango:[0,32],paso:0.5,torico:false,notas:"Hidrofílico con superficie hidrofóbica" },
+    "AT TORBI 709MP": { tipo:"Tórico",material:"Acrílico hidrofílico",A:118.6,acd:5.64,rango:[0,32],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.00,2.50,3.00,3.50,4.00,4.50,5.00,5.50,6.00],notas:"Amplio rango cilíndrico" },
+    "AT LISA tri 839MP": { tipo:"Trifocal",material:"Acrílico hidrofílico",A:118.6,acd:5.64,rango:[0,32],paso:0.5,torico:false,notas:"+3.33D / +1.66D adds" }
+  },
+  "Bausch + Lomb": {
+    "enVista MX60": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.1,acd:5.74,rango:[6,30],paso:0.5,torico:false,notas:"Baja aberración cromática" },
+    "Akreos AO MI60": { tipo:"Monofocal asférica",material:"Acrílico hidrofílico",A:118.0,acd:5.44,rango:[0,35],paso:0.5,torico:false,notas:"4 hápticos, alta estabilidad" },
+    "SofPort AO LI61AO": { tipo:"Monofocal asférica",material:"Silicona",A:119.7,acd:5.90,rango:[10,30],paso:0.5,torico:false,notas:"Silicona asférica" }
+  },
+  "Hoya": {
+    "Vivinex XY1": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.2,acd:5.76,rango:[0,35],paso:0.5,torico:false,notas:"Alta resistencia al glistening" },
+    "Vivinex Toric XY1A": { tipo:"Tórico",material:"Acrílico hidrofóbico",A:119.2,acd:5.76,rango:[0,35],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.25,3.00,3.75,4.50,5.25,6.00],notas:"Plataforma tórica Hoya" }
+  },
+  "Rayner": {
+    "RayOne EMV": { tipo:"Monofocal asférica",material:"Acrílico hidrofóbico",A:119.1,acd:5.74,rango:[0,35],paso:0.5,torico:false,notas:"Enhanced Monofocal Vision" },
+    "RayOne Toric": { tipo:"Tórico",material:"Acrílico hidrofóbico",A:119.1,acd:5.74,rango:[0,35],paso:0.5,torico:true,paso_cyl:0.25,cyl_lio:[1.00,1.50,2.25,3.00,3.75,4.50,5.25,6.00],notas:"Plataforma tórica Rayner" }
+  }
+};
+
+// Inicializar selector de fabricantes
+function initIOLSelector() {
+  const brandSel = document.getElementById('iolBrand');
+  if (!brandSel) return;
+  Object.keys(IOL_DB).forEach(brand => {
+    const opt = document.createElement('option');
+    opt.value = brand; opt.textContent = brand;
+    brandSel.appendChild(opt);
+  });
+}
+
+function filterIOLs() {
+  const brand = document.getElementById('iolBrand').value;
+  const modelSel = document.getElementById('iolModel');
+  modelSel.innerHTML = '<option value="">— Seleccionar modelo —</option>';
+  document.getElementById('iolType').value = '';
+  document.getElementById('iolInfo').style.display = 'none';
+  if (!brand || !IOL_DB[brand]) return;
+  Object.keys(IOL_DB[brand]).forEach(model => {
+    const opt = document.createElement('option');
+    opt.value = model; opt.textContent = model;
+    modelSel.appendChild(opt);
+  });
+}
+
+function applyIOL() {
+  const brand = document.getElementById('iolBrand').value;
+  const model = document.getElementById('iolModel').value;
+  if (!brand || !model || !IOL_DB[brand]?.[model]) return;
+  const iol = IOL_DB[brand][model];
+
+  // Llenar constante A en ambos ojos
+  ['OD_A','OI_A'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = iol.A;
+  });
+
+  // Mostrar tipo
+  document.getElementById('iolType').value = iol.tipo;
+
+  // Mostrar info del LIO
+  const infoEl = document.getElementById('iolInfo');
+  const cylInfo = iol.torico ? `<br>Cilíndrico disponible: ${iol.cyl_lio.map(c=>c.toFixed(2)+'D').join(' · ')} (pasos de ${iol.paso_cyl}D)` : '';
+  infoEl.innerHTML = `
+    <strong>${brand} ${model}</strong><br>
+    Material: ${iol.material} &nbsp;·&nbsp; Cte-A: <strong>${iol.A}</strong> &nbsp;·&nbsp; ACD: ${iol.acd}mm<br>
+    Rango esférico: ${iol.rango[0]} – ${iol.rango[1]} D (pasos de ${iol.paso}D)${cylInfo}<br>
+    <span style="color:var(--text3)">${iol.notas}</span>`;
+  infoEl.style.display = 'block';
+
+  // Si es tórico, activar módulo tórico automáticamente
+  if (iol.torico && curMod !== 1) {
+    setMod(1);
+  }
+}
+
+// Encontrar potencia disponible más cercana dado un resultado calculado
+function nearestAvailable(power, iol) {
+  if (!iol || power == null) return null;
+  const paso = iol.paso || 0.5;
+  const min = iol.rango[0], max = iol.rango[1];
+  // Round to nearest step
+  const rounded = Math.round(power / paso) * paso;
+  if (rounded < min) return min;
+  if (rounded > max) return max;
+  return Math.round(rounded * 10) / 10;
+}
+
+// Encontrar potencias disponibles adyacentes (±1 paso)
+function availableRange(power, iol) {
+  if (!iol || power == null) return null;
+  const paso = iol.paso || 0.5;
+  const nearest = nearestAvailable(power, iol);
+  const prev = Math.max(iol.rango[0], Math.round((nearest - paso) * 10) / 10);
+  const next = Math.min(iol.rango[1], Math.round((nearest + paso) * 10) / 10);
+  return { nearest, prev, next, paso };
+}
+
+// Obtener LIO actualmente seleccionado
+function getSelectedIOL() {
+  const brand = document.getElementById('iolBrand')?.value;
+  const model = document.getElementById('iolModel')?.value;
+  if (!brand || !model) return null;
+  return IOL_DB[brand]?.[model] || null;
+}
+
+/* ============================================================
+   DISPONIBILIDAD — Agregar al resultado de cada ojo
+   ============================================================ */
+function buildAvailabilityBlock(calcResult, iol) {
+  if (!iol || calcResult == null) return '';
+  const av = availableRange(calcResult, iol);
+  if (!av) return '';
+  const exact = Math.abs(av.nearest - calcResult) < 0.01;
+  return `
+    <div style="margin-top:8px; background:var(--bg2); border-radius:var(--radius); padding:8px 12px; border-left:3px solid var(--blue);">
+      <p style="font-size:11px; font-weight:600; color:var(--text); margin-bottom:4px;">
+        <i class="ti ti-package" style="font-size:12px; vertical-align:-1px"></i>
+        Disponibilidad — ${document.getElementById('iolModel')?.value || 'LIO seleccionado'}
+      </p>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:11px;">
+        <span>Calculada: <strong>${calcResult?.toFixed(2)} D</strong></span>
+        <span>Disponible más cercana: <strong style="color:var(--blue)">${av.nearest.toFixed(1)} D</strong>${exact?' ✓':''}</span>
+        <span>Adyacentes: ${av.prev.toFixed(1)} D · ${av.next.toFixed(1)} D</span>
+        <span style="color:var(--text3)">Pasos: ${av.paso} D</span>
+      </div>
+    </div>`;
+}
+
 // INIT
 setMod(0);
+initIOLSelector();
 document.getElementById('modDesc').textContent = MODS[0].desc;
 initSession();
 </script>
