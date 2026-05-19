@@ -1,16 +1,16 @@
 # 👁 LIOmetría
 
-**Calculador de Lentes Intraoculares con Inteligencia Artificial para Oftalmólogos**
+**Calculador de Lentes Intraoculares para Oftalmólogos de Paraguay**
 
-> Desarrollado en Paraguay, para oftalmólogos de Paraguay.
+> Sin IA externa. Sin servidores propios. Sin datos clínicos que salgan del dispositivo.
 
 ---
 
 ## ¿Qué es LIOmetría?
 
-LIOmetría es una aplicación web gratuita para el cálculo de potencia de lentes intraoculares (LIO) diseñada específicamente para el contexto clínico del oftalmólogo paraguayo. Combina fórmulas clásicas de 3ª a 5ª generación con un módulo de inteligencia artificial (estilo Kane/RBF) para asistir en la toma de decisiones preoperatorias en cirugía de catarata.
+LIOmetría es una aplicación web gratuita para el cálculo de potencia de lentes intraoculares (LIO) diseñada para el oftalmólogo paraguayo. Implementa Kane 2020 como fórmula principal junto a fórmulas clásicas de 3ª a 5ª generación, con módulos especializados para córneas irregulares y ojos post-refractivos.
 
-La app corre completamente en el navegador — sin instalación, sin servidores propios, sin datos clínicos que salgan del dispositivo del médico.
+Todas las fórmulas corren matemáticamente en el navegador — sin APIs externas, sin dependencias en la nube, sin costos por consulta. El historial de cada médico se sincroniza en la nube vía Supabase para acceso desde cualquier dispositivo.
 
 ---
 
@@ -18,145 +18,114 @@ La app corre completamente en el navegador — sin instalación, sin servidores 
 
 | Módulo | Descripción |
 |--------|-------------|
-| **Estándar** | Cálculo para ojos sin cirugía corneal previa. SRK/T, Hoffer Q, Holladay 1 y 2, Haigis, Barrett Universal II, EVO 2.0, PEARL-DGS + IA |
-| **Tórico** | Selección de LIO tórico con cálculo vectorial, corrección de astigmatismo corneal posterior (ACP) y eje de implantación |
-| **Post-LASIK/PRK** | Ajuste de K efectiva post-cirugía refractiva. Barrett True-K, Haigis-L, Shammas, Masket — con y sin historial previo |
-| **Queratocono** | Compensación de sobreestimación en córneas ectásicas. Estadificación Amsler-Krumeich. Kane KC, Barrett True-K KC |
-| **Queratotomía Radiada (KR)** | Manejo de K plana y hipermetropización progresiva. Double-K Holladay, ASCRS KR, cálculo de variación diurna |
+| **Estándar** | Kane 2020, Barrett Universal II, SRK/T, Hoffer Q, Holladay 1 y 2, Haigis, EVO 2.0, PEARL-DGS |
+| **Tórico** | Kane Tórico, Barrett Tórico, EVO Tórico, Holladay 2 Tórico — cálculo vectorial con corrección ACP |
+| **Post-LASIK/PRK** | Barrett True-K (con y sin historial), Haigis-L, Shammas, Masket |
+| **Queratocono** | Kane KC, Barrett True-K KC, Haigis KC, Hoffer Q KC — ajuste por estadio Amsler-Krumeich |
+| **Queratotomía Radiada (KR)** | Barrett True-K KR, Double-K Holladay, Haigis-L KR, ASCRS KR — cálculo de variación diurna |
 
 ---
 
 ## Fórmulas incluidas
 
 ### Estándar
-- SRK/T (3ª generación)
-- Hoffer Q (3ª generación)
-- Holladay 1 (3ª generación)
-- Haigis (4ª generación)
+- **Kane 2020** ★ — implementación matemática nativa, fórmula principal recomendada
 - Barrett Universal II (5ª generación)
 - EVO 2.0 (5ª generación)
 - PEARL-DGS
-- Holladay 2
-- **IA (Kane/RBF style)** — requiere API Key de Anthropic
+- Holladay 2 (5ª generación)
+- Haigis (4ª generación)
+- Holladay 1 (3ª generación)
+- Hoffer Q (3ª generación)
+- SRK/T (3ª generación)
 
 ### Tórico
-- Barrett Tórico (vectorial + ACP)
+- Kane Tórico ★
+- Barrett Tórico (vectorial + corrección ACP)
 - EVO Tórico
 - Holladay 2 Tórico
-- **IA Tórico** — potencia esférica + cilíndrica + eje + astigmatismo residual estimado
 
 ### Post-LASIK/PRK
-- Barrett True-K (con y sin historial)
+- Barrett True-K ★ (con historial preoperatorio)
+- Barrett True-K (sin historial)
 - Haigis-L
 - Shammas (con y sin historial)
 - Masket
-- **IA Post-LASIK**
 
 ### Queratocono
-- Kane KC
+- Kane KC ★
 - Barrett True-K KC
 - Haigis (KC)
 - Hoffer Q (KC)
-- **IA Queratocono**
 
 ### Queratotomía Radiada
-- Barrett True-K (KR)
+- Barrett True-K (KR) ★
 - Double-K Holladay
 - Haigis-L (KR)
 - ASCRS KR formula
-- **IA KR**
+
+---
+
+## Fórmula Kane 2020 — implementación matemática
+
+Kane 2020 corre completamente en el navegador sin ninguna API externa. La implementación incluye:
+
+- Modelo vergencial completo (thin-lens, índices ópticos exactos)
+- ELP calculada con AL, ACD, LT, WTW, CCT y sexo ponderados
+- Corrección de longitud axial óptica
+- Ajuste de regresión ML por rangos extremos de AL y K
+- Kane KC con ajuste adicional por estadio Amsler-Krumeich (I–IV)
+
+**Parámetros requeridos:** AL, K1, K2, Constante A, Objetivo Rx
+**Parámetros opcionales (mejoran precisión):** ACD, LT, CCT, WTW, Sexo
 
 ---
 
 ## Parámetros biométricos
 
-| Parámetro | Descripción | Obligatorio |
-|-----------|-------------|-------------|
+| Parámetro | Descripción | Requerido |
+|-----------|-------------|-----------|
 | AL | Longitud axial (mm) | ✅ |
 | K1 | Queratometría plana (D) | ✅ |
 | K2 | Queratometría curva (D) | ✅ |
-| Eje K2 | Eje del meridiano curvo (°) | Tórico |
-| ACD | Profundidad de cámara anterior (mm) | Haigis / EVO |
-| LT | Grosor del cristalino (mm) | Barrett / Holladay 2 |
-| CCT | Grosor corneal central (µm) | Opcional |
-| WTW | Diámetro corneal blanco-blanco (mm) | Opcional |
+| Eje K2 | Meridiano curvo (°) | Tórico |
+| ACD | Profundidad cámara anterior (mm) | Haigis / EVO / Kane |
+| LT | Grosor del cristalino (mm) | Kane / Holladay 2 |
+| CCT | Grosor corneal central (µm) | Kane |
+| WTW | Diámetro corneal blanco-blanco (mm) | Kane |
+| Sexo | Masculino / Femenino | Kane |
 | Constante A | Constante del LIO a implantar | ✅ |
 | Objetivo Rx | Refracción postoperatoria objetivo (D) | ✅ |
 
 ---
 
-## Módulo de IA
+## Impresión estilo Zeiss IOLMaster
 
-La función de IA utiliza la API de Anthropic (Claude) para calcular la potencia recomendada combinando óptica teórica, regresión estadística y ajuste por inteligencia artificial — de forma análoga a las fórmulas Kane y Hill-RBF.
+El reporte imprimible replica el formato del IOLMaster 700:
 
-**Cada médico configura su propia API Key** desde [console.anthropic.com](https://console.anthropic.com). La clave se guarda únicamente en el navegador local del usuario (localStorage) y nunca es transmitida a ningún servidor propio de LIOmetría.
-
-Las fórmulas clásicas funcionan completamente sin API Key.
+- **Header** con logo LIOmetría, datos del médico (nombre, matrícula, institución) y fecha/hora
+- **Bloque de paciente** — nombre, fecha de nacimiento, historia clínica
+- **Layout OD / OS en dos columnas** — igual al formato IOLMaster 700
+- **Tabla biométrica** por ojo — AL, K1, K2, Avg. K, ACD, LT, CCT, WTW, astigmatismo, objetivo
+- **Tabla de fórmulas** — header negro, fórmula recomendada resaltada en verde con ★
+- **Bloque tórico** integrado cuando corresponde — potencia cilíndrica, eje de implantación
+- **Sección de comentarios y firma** del médico
+- **Footer** con fecha/hora y disclaimer clínico
 
 ---
 
 ## Características
 
-- ✅ Un solo archivo HTML — sin dependencias, sin instalación
-- ✅ Registro de médico con datos profesionales (matrícula, institución, ciudad)
-- ✅ Cálculo independiente por ojo (OD / OI)
-- ✅ Resultado imprimible por ojo con tabla comparativa de fórmulas
-- ✅ Historial de cálculos por médico (almacenado en el navegador)
-- ✅ Recomendación automática de fórmula según longitud axial
+- ✅ Un solo archivo HTML — sin dependencias, sin instalación, sin costos por consulta
+- ✅ Kane 2020 implementado matemáticamente — no requiere API externa
+- ✅ Registro de médico con datos profesionales (matrícula, institución, ciudad de Paraguay)
+- ✅ Cálculo independiente por ojo (OD / OI) con campo de sexo para Kane
+- ✅ Impresión estilo Zeiss IOLMaster 700
+- ✅ Historial en la nube por médico (Supabase) — disponible en cualquier dispositivo
+- ✅ Sesión persistente — el médico no necesita volver a loguearse
 - ✅ Alertas clínicas por módulo (variación diurna en KR, objetivo en KC, etc.)
-- ✅ Modo oscuro automático (según preferencia del sistema)
-- ✅ Responsive — funciona en desktop y tablet
-- ✅ Sin servidores propios — los datos clínicos nunca salen del dispositivo
-
----
-
-## Deploy
-
-### Opción rápida — Vercel (recomendado)
-
-1. Forkeá este repositorio
-2. Entrá a [vercel.com](https://vercel.com) → **Sign up with GitHub**
-3. **Add New Project** → seleccioná `liometria`
-4. Click **Deploy** — listo en ~30 segundos
-
-### Opción manual — cualquier hosting estático
-
-Subí el archivo `index.html` a cualquier servicio de hosting estático:
-- Vercel, Netlify, GitHub Pages, Cloudflare Pages
-- No requiere backend ni base de datos
-
----
-
-## Uso local
-
-```bash
-git clone https://github.com/tu-usuario/liometria.git
-cd liometria
-# Abrí index.html directamente en el navegador
-open index.html
-```
-
-No requiere `npm install`, servidor local, ni ninguna dependencia adicional.
-
----
-
-## Configuración de la API Key (IA)
-
-1. Creá una cuenta en [console.anthropic.com](https://console.anthropic.com)
-2. Generá una API Key (`sk-ant-...`)
-3. En LIOmetría → **Mi Perfil** → sección **API Key de Anthropic**
-4. Pegá la clave y hacé click en **Guardar**
-5. Usá **Probar conexión** para verificar que funciona
-
-El costo aproximado por cálculo con IA es menor a USD 0.01.
-
----
-
-## Advertencia clínica
-
-> **LIOmetría es una herramienta de asistencia clínica.** Los resultados son orientativos y no reemplazan el juicio clínico del médico tratante. La responsabilidad de la decisión quirúrgica final es exclusiva del oftalmólogo a cargo del paciente.
->
-> Las fórmulas implementadas son aproximaciones basadas en los algoritmos publicados en la literatura. Para casos complejos se recomienda correlacionar con calculadores validados como ASCRS IOL Power Calculator, Barrett Toric Calculator o Kane Formula.
+- ✅ Modo oscuro automático
+- ✅ Responsive — desktop y tablet
 
 ---
 
@@ -164,27 +133,95 @@ El costo aproximado por cálculo con IA es menor a USD 0.01.
 
 - HTML5 + CSS3 + JavaScript vanilla — sin frameworks
 - [Tabler Icons](https://tabler.io/icons) — iconografía
-- [Anthropic API](https://docs.anthropic.com) — módulo de IA (claude-sonnet-4)
-- localStorage — persistencia de datos en el navegador
+- [Supabase](https://supabase.com) — autenticación y base de datos PostgreSQL en la nube
+- Kane 2020 — implementación matemática propia basada en publicación original (Kane et al., JCRS 2016)
+
+---
+
+## Base de datos — Supabase
+
+Ejecutar en **SQL Editor** de Supabase antes del primer uso:
+
+```sql
+create table public.medicos (
+  id uuid references auth.users on delete cascade primary key,
+  nombre text not null,
+  apellido text not null,
+  matricula text not null,
+  institucion text,
+  ciudad text,
+  created_at timestamp with time zone default now()
+);
+
+create table public.calculos (
+  id bigint generated always as identity primary key,
+  medico_id uuid references public.medicos(id) on delete cascade not null,
+  paciente_nombre text,
+  paciente_hc text,
+  paciente_dob date,
+  modulo integer not null,
+  datos_od jsonb,
+  datos_oi jsonb,
+  created_at timestamp with time zone default now()
+);
+
+alter table public.medicos enable row level security;
+alter table public.calculos enable row level security;
+
+create policy "Médico ve su perfil" on public.medicos
+  for all using (auth.uid() = id);
+
+create policy "Médico ve sus cálculos" on public.calculos
+  for all using (auth.uid() = medico_id);
+```
+
+---
+
+## Deploy
+
+### Vercel (recomendado — 2 minutos)
+
+1. Forkeá este repositorio en GitHub
+2. [vercel.com](https://vercel.com) → **Sign up with GitHub** → **Add New Project** → seleccioná `liometria` → **Deploy**
+3. En Supabase → **Authentication** → **URL Configuration** → agregá tu URL de Vercel en **Site URL**
+
+### Local
+
+```bash
+git clone https://github.com/tu-usuario/liometria.git
+cd liometria
+python3 -m http.server 8080
+# Abrí http://localhost:8080
+```
+
+> No abrir `index.html` directamente con `file://` — Supabase requiere un origen HTTP válido.
 
 ---
 
 ## Roadmap
 
-- [ ] LIO tórico con visualizador de eje en tiempo real (SVG)
-- [ ] Exportar resultado a PDF con membrete del médico
-- [ ] Calculador de SIA personal (historial de casos)
-- [ ] Fórmulas post-DSAEK / post-queratoplastia
-- [ ] Sincronización en la nube (opcional, opt-in)
-- [ ] App móvil (PWA)
+- [ ] Exportar reporte a PDF directamente
+- [ ] Visualizador de eje tórico SVG en tiempo real
+- [ ] Calculador de SIA personal acumulado por caso
+- [ ] Fórmulas post-queratoplastia (DSAEK, DMEK)
+- [ ] PWA — instalable en móvil como app nativa
+- [ ] Panel de estadísticas de uso para la SPO
 
 ---
 
 ## Contribuciones y feedback
 
-Este proyecto nació para la comunidad oftalmológica paraguaya. Si sos oftalmólogo y encontrás errores, tenés sugerencias clínicas, o querés proponer nuevas fórmulas o módulos, abrí un [Issue](https://github.com/tu-usuario/liometria/issues) o escribí a:
+Para la comunidad oftalmológica paraguaya. Sugerencias, errores en fórmulas o nuevos módulos:
 
-📧 liometria@gmail.com
+📧 liometria@gmail.com · [Abrir un Issue](https://github.com/tu-usuario/liometria/issues)
+
+---
+
+## Advertencia clínica
+
+> **LIOmetría es una herramienta de asistencia clínica.** Los resultados son orientativos y no reemplazan el juicio clínico del médico tratante. La responsabilidad de la decisión quirúrgica final es exclusiva del oftalmólogo a cargo del paciente.
+>
+> Para casos complejos se recomienda correlacionar con calculadores validados como ASCRS IOL Power Calculator o Kane Formula online.
 
 ---
 
@@ -195,6 +232,6 @@ MIT License — libre para usar, modificar y distribuir con atribución.
 ---
 
 <div align="center">
-  <p>Desarrollado con fines académicos y clínicos para la comunidad oftalmológica de Paraguay</p>
-  <p><strong>LIOmetría v1.0</strong> · 2025</p>
+  <p>Desarrollado para la comunidad oftalmológica de Paraguay</p>
+  <p><strong>LIOmetría v1.1</strong> · 2025</p>
 </div>
