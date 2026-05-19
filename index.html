@@ -1157,21 +1157,6 @@ async function saveProfile() {
   if(st) st.innerHTML = '<span style="color:#27500A"><i class="ti ti-check"></i> Perfil actualizado.</span>';
 }
 
-
-  const el = document.getElementById('apiStatus');
-  el.innerHTML = '<span class="spinner"></span> Probando conexión...';
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 50, messages: [{ role: 'user', content: 'Test' }] })
-    });
-    const data = await resp.json();
-    if (data.content) { el.innerHTML = '<span style="color:#27500A"><i class="ti ti-check"></i> Conexión exitosa. IA disponible.</span>'; apiKey = k; localStorage.setItem('liometria_apikey', k); }
-    else el.innerHTML = `<span style="color:#993C1D"><i class="ti ti-x"></i> Error: ${data.error?.message||'API Key inválida.'}</span>`;
-  } catch(e) { el.innerHTML = `<span style="color:#993C1D"><i class="ti ti-x"></i> Error de conexión.</span>`; }
-}
-
 /* ============================================================
    PRINT — Zeiss IOLMaster style
    ============================================================ */
