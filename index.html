@@ -232,7 +232,7 @@
     <div class="logo"><i class="ti ti-eye"></i></div>
     <div class="logo-text">
       <h1>LIOmetría</h1>
-      <p>Calculador de LIO con IA · Para oftalmólogos de Paraguay</p>
+      <p>Calculador de LIO · Para oftalmólogos de Paraguay</p>
     </div>
     <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
       <span id="docBadge" class="hidden doc-badge"></span>
@@ -1054,7 +1054,6 @@ async function calcAll() {
       html += `<div class="card"><p style="color:var(--text2); font-size:12px;"><i class="ti ti-alert-circle" style="font-size:13px; vertical-align:-1px"></i> Faltan datos para ${eye==='OD'?'Ojo Derecho':'Ojo Izquierdo'} (AL, K1, K2 requeridos mínimo).</p></div>`;
       continue;
     }
-    let aiResult = null;
     // IA module removed — Kane runs natively
     const aiResult = null;
     html += renderEyeResult(eye, d, aiResult);
