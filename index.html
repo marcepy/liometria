@@ -1533,111 +1533,262 @@ function buildToricBlock(d) {
 function printReport() {
   if (!window._lastCalc) { notify('Primero realizá un cálculo de LIO.', 'error'); return; }
   const calc = window._lastCalc;
-  const mod = calc.mod;
+  const mod  = calc.mod;
   const modNames = ['Estándar','Tórico','Post-LASIK/PRK','Queratocono','KR'];
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('es-PY', {day:'2-digit', month:'2-digit', year:'numeric'});
-  const timeStr = now.toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
-  const dob = calc.patDOB ? new Date(calc.patDOB).toLocaleDateString('es-PY') : '—';
+  const now  = new Date();
+  const dateStr = now.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const timeStr = now.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
+  const dob  = calc.patDOB ? new Date(calc.patDOB+' ').toLocaleDateString('es-PY') : '---';
+  const sel  = calc.selectedFormulas ? new Set(calc.selectedFormulas) : null;
+  const hasF = k => !sel || sel.has(k);
+  const vf   = 0.71; // vertex factor IOL→cornea
 
-  // Build eye blocks
-  const eyes = Object.keys(calc.eyes || {});
-  let eyeBlocks = '';
-  eyes.forEach(eye => {
-    const d = calc.eyes[eye];
-    if (!d || !d.AL) return;
-    const isOD = eye === 'OD';
-    eyeBlocks += `
-      <div>
-        <div class="prt-eye-head">
-          ${isOD ? 'OD right' : 'OS left'}
-          <span class="eye-side">Módulo: ${modNames[mod]}</span>
-        </div>
-        ${buildBioTable(d, eye)}
-        ${mod === 1 ? buildToricBlock(d) : ''}
-        <div class="prt-formula-title">IOL CALCULATION — ${modNames[mod]}</div>
-        ${buildFormulaTable(d, mod, calc.selectedFormulas)}
-        <div class="prt-warn">★ Fórmula recomendada · Objetivo: ${(d.T||0)>=0?'+':''}${(d.T||0).toFixed(2)} D · Constante A: ${d.A||'—'}</div>
-      </div>`;
-  });
+  // ── helpers ──────────────────────────────────────────────
+  function fmt(v, dec=2, sign=false) {
+    if (v == null || isNaN(v)) return '---';
+    const s = Math.abs(v).toFixed(dec);
+    if (sign) return (v >= 0 ? '+' : '-') + s;
+    return (v < 0 ? '-' : '') + s;
+  }
+  function r2v(v) { return v != null ? Math.round(v * 2) / 2 : null; }
 
-  // If only one eye, add empty right column for layout
-  if (eyes.length === 1) {
-    eyeBlocks += '<div></div>';
+  // ── per-eye data ─────────────────────────────────────────
+  function buildEye(eye, d) {
+    if (!d || !d.AL) return null;
+    const K  = ((d.K1||0)+(d.K2||0))/2;
+    const axK2 = d.Kaxis ? parseInt(d.Kaxis) : null;
+    const axK1 = axK2 ? (((axK2+90-1)%180)+1) : null;
+    const dK   = d.K2 && d.K1 ? (d.K2-d.K1) : null; // ΔK (signed, K2>K1 convention)
+    const cyl  = dK != null ? Math.abs(dK).toFixed(2) : '---';
+    const A    = d.A || 119.0;
+    const a0   = parseFloat((-0.3 + (A-119.0)/6.0).toFixed(3));
+    const SF   = parseFloat(((A-118.84)/1.45).toFixed(2));
+    const pACD = parseFloat((SF+4.97).toFixed(2));
+    const LF   = parseFloat((A-118.0).toFixed(2)); // Lens Factor Barrett approx
+    return { d, K, axK1, axK2, dK, cyl, A, a0, SF, pACD, LF, eye };
   }
 
-  const html = `
-    <div class="prt">
-      <div class="prt-logo">
-        <div>
-          <h1>LIOmetría</h1>
-          <div class="prt-sub">Calculador de Lentes Intraoculares · Para oftalmólogos de Paraguay</div>
-        </div>
-        <div style="text-align:right; font-size:8pt;">
-          <div><strong>${user?.institucion || user?.nombre + ' ' + user?.apellido || 'LIOmetría'}</strong></div>
-          <div>Dr. ${user?.nombre||''} ${user?.apellido||''} · ${user?.matricula||''}</div>
-          <div>Fecha: ${dateStr} ${timeStr}</div>
-        </div>
+  // ── IOL power range table ────────────────────────────────
+  // Returns HTML rows: 5 rows around emmetropia, recommended in bold,
+  // plus "Emetropía" row at bottom (exact value)
+  function iolTable(emme, targetRx, constLabel) {
+    if (emme == null) return '<tr><td colspan="2" style="color:#aaa;font-size:7pt;text-align:center">---</td></tr>';
+    const rec = r2v(emme); // recommended (rounded to 0.5D)
+    // Generate 5 potencies: rec-1.0, rec-0.5, rec, rec+0.5, rec+1.0
+    const steps = [-1.0, -0.5, 0.0, 0.5, 1.0];
+    let rows = steps.map(s => {
+      const p   = Math.round((rec + s) * 2) / 2;
+      const rx  = ((emme - p) * vf + (targetRx||0));
+      const isr = Math.abs(s) < 0.01; // is recommended
+      const st  = isr ? 'font-weight:900;' : '';
+      return `<tr style="${st}">
+        <td style="text-align:right;padding:1px 5px;border:0.5px solid #ddd;min-width:38px;">${fmt(p,2,true)}</td>
+        <td style="text-align:right;padding:1px 5px;border:0.5px solid #ddd;min-width:38px;">${fmt(rx,2,true)}</td>
+      </tr>`;
+    }).join('');
+    // Emetropía row
+    rows += `<tr><td style="padding:1px 5px;border-top:1px solid #999;font-size:7pt;" colspan="2">${fmt(emme,2,true)}&nbsp;&nbsp;Emetropía</td></tr>`;
+    if (constLabel) rows += `<tr><td colspan="2" style="font-size:6.5pt;color:#666;padding:0 4px;">${constLabel}</td></tr>`;
+    return rows;
+  }
+
+  // ── formula block (one LIO + formula) ───────────────────
+  function fBlock(label, formula, emme, constLabel) {
+    return `
+    <div style="border:1px solid #ccc;padding:4px 6px;min-width:115px;flex:1;">
+      <div style="font-size:7.5pt;font-weight:bold;border-bottom:1px solid #888;margin-bottom:2px;display:flex;justify-content:space-between;">
+        <span>${label}</span><span style="background:#333;color:#fff;padding:0 3px;font-size:6.5pt;">${formula}</span>
       </div>
-      <div class="prt-meta">
-        <div><span class="pm-label">Paciente: </span><span class="pm-val">${calc.patName||'—'}</span></div>
-        <div><span class="pm-label">Fecha nac.: </span><span class="pm-val">${dob}</span></div>
-        <div><span class="pm-label">HC / Cédula: </span><span class="pm-val">${calc.patHC||'—'}</span></div>
-        <div><span class="pm-label">Médico: </span><span class="pm-val">Dr. ${user?.nombre||''} ${user?.apellido||''}</span></div>
-        <div><span class="pm-label">Matrícula: </span><span class="pm-val">${user?.matricula||'—'}</span></div>
-        <div><span class="pm-label">LIO seleccionado: </span><span class="pm-val">${calc.iolModel||'No especificado'}</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:8pt;">
+        <tr style="background:#1a1a1a;color:#fff;">
+          <th style="text-align:right;padding:1px 5px;font-size:7pt;">IOL (D)</th>
+          <th style="text-align:right;padding:1px 5px;font-size:7pt;">Res. SE</th>
+        </tr>
+        ${iolTable(emme, 0, constLabel)}
+      </table>
+    </div>`;
+  }
+
+  // ── biometry section (shared OD/OS) ──────────────────────
+  function bioSection(ed) {
+    if (!ed) return '<div style="color:#aaa;font-size:8pt;padding:8px;">Sin datos</div>';
+    const {d, K, axK1, axK2, dK, cyl, A, a0, SF, pACD, LF} = ed;
+    const isOD = ed.eye === 'OD';
+    return `
+    <div style="font-size:7.5pt;line-height:1.55;display:grid;grid-template-columns:1fr 1fr;gap:0 8px;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #ccc;">
+      <div>
+        <div><strong>AL</strong>&nbsp;&nbsp;${d.AL||'---'} mm</div>
+        <div><strong>ACD</strong>&nbsp;&nbsp;${d.ACD||'---'} mm</div>
+        <div><strong>LT</strong>&nbsp;&nbsp;${d.LT||'---'} mm</div>
+        <div><strong>CCT</strong>&nbsp;&nbsp;${d.CCT||'---'} µm</div>
+        <div><strong>WTW</strong>&nbsp;&nbsp;${d.WTW||'---'} mm</div>
       </div>
-      <div class="prt-eyes">${eyeBlocks}</div>
-      <div class="prt-sig">
-        <div class="prt-sig-box">Comentarios:</div>
-        <div class="prt-sig-box">Firma y sello del médico:</div>
+      <div>
+        <div><strong>Avg. K</strong>&nbsp;&nbsp;${K.toFixed(2)} D</div>
+        <div><strong>K1</strong>&nbsp;&nbsp;${d.K1||'---'} D${axK1?' @ '+axK1+'°':''}</div>
+        <div><strong>K2</strong>&nbsp;&nbsp;${d.K2||'---'} D${axK2?' @ '+axK2+'°':''}</div>
+        <div><strong>ΔK</strong>&nbsp;&nbsp;${dK!=null?fmt(dK,2,true)+' D @ '+(axK2||'---')+'°':'---'}</div>
+        <div><strong>Sexo</strong>&nbsp;&nbsp;${d.Sex==='F'?'Femenino':'Masculino'}</div>
       </div>
-      <div class="prt-footer">
-        LIOmetría v1.0 · Resultados orientativos. La responsabilidad clínica es exclusiva del médico tratante. ·
-        Generado: ${dateStr} ${timeStr}
-      </div>
+    </div>
+    <div style="font-size:7pt;color:#555;margin-bottom:4px;">
+      Estatus: Fáquica &nbsp;·&nbsp; VS: Humor vítreo &nbsp;·&nbsp; LVC: No tratado &nbsp;·&nbsp;
+      Refr. dest.: ${fmt(d.T||0,2,true)} D &nbsp;·&nbsp; n = 1,3375
+    </div>`;
+  }
+
+  // ── formula grid for one eye ──────────────────────────────
+  function formulaGrid(ed, eyeLabel) {
+    if (!ed) return '';
+    const {d, A, a0, SF, pACD, LF} = ed;
+
+    // Compute emmetropia for each formula
+    const em = {
+      Kane:     calcKane(d),
+      Barrett:  calcBarrett(d),
+      SRKT:     calcSRKT(d),
+      HofferQ:  calcHofferQ(d),
+      Holladay1:calcHolladay1(d),
+      Holladay2:calcHolladay2(d),
+      Haigis:   calcHaigis(d),
+      EVO:      calcEVO(d),
+      PearlDGS: calcPearlDGS(d),
+    };
+
+    // Build rows of formula blocks — show only selected, 3 per row
+    const formulaDefs = [
+      { k:'Kane',      label:'Kane 2020 ★',  formula:'Kane',         emme: em.Kane,      const_: `LF: ${fmt(LF,2,true)} DF: +5.0` },
+      { k:'Barrett',   label:'Barrett II',   formula:'Barrett Univ. II', emme: em.Barrett,   const_: `LF: ${fmt(LF,2,true)} DF: +5.0` },
+      { k:'SRKT',      label:'SRK®/T',       formula:'SRK®/T',       emme: em.SRKT,      const_: `A: ${A}` },
+      { k:'HofferQ',   label:'Hoffer® Q',    formula:'Hoffer® Q',    emme: em.HofferQ,   const_: `pACD: ${pACD}` },
+      { k:'Holladay1', label:'Holladay 1',   formula:'Holladay 1',   emme: em.Holladay1, const_: `SF: ${SF}` },
+      { k:'Holladay2', label:'Holladay 2',   formula:'Holladay 2',   emme: em.Holladay2, const_: `SF: ${SF}` },
+      { k:'Haigis',    label:'Haigis',       formula:'Haigis',       emme: em.Haigis,    const_: `a0: ${a0} a1: +0,400 a2: +0,100` },
+      { k:'EVO',       label:'EVO 2.0',      formula:'EVO 2.0',      emme: em.EVO,       const_: `LF: ${fmt(LF,2,true)}` },
+      { k:'PearlDGS',  label:'PEARL-DGS',    formula:'PEARL-DGS',   emme: em.PearlDGS,  const_: '' },
+    ];
+
+    const visible = formulaDefs.filter(f => hasF(f.k) && f.emme != null);
+
+    // Group into rows of 3
+    const rows = [];
+    for (let i = 0; i < visible.length; i += 3) {
+      rows.push(visible.slice(i, i+3));
+    }
+
+    let html = `<div style="font-size:8pt;font-weight:bold;text-transform:uppercase;color:#555;margin-bottom:4px;letter-spacing:.5px;">
+      CÁLCULO DE IOL — ${eyeLabel} — ${modNames[mod]}
     </div>`;
 
-  // Use popup window for reliable cross-browser print
-  const win = window.open('', '_blank', 'width=900,height=700');
+    rows.forEach(row => {
+      html += `<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">`;
+      row.forEach(f => {
+        html += fBlock(f.label, f.formula, f.emme, f.const_);
+      });
+      html += `</div>`;
+    });
+
+    return html;
+  }
+
+  // ── BUILD FULL REPORT ────────────────────────────────────
+  const odData = calc.eyes?.OD;
+  const oiData = calc.eyes?.OI;
+  const edOD   = buildEye('OD', odData);
+  const edOS   = buildEye('OS', oiData);
+  const iol    = calc.iolModel ? calc.iolModel : 'No especificado';
+  const inst   = user?.institucion || '';
+  const medico = `Dr. ${user?.nombre||''} ${user?.apellido||''} · ${user?.matricula||''}`;
+
+  const html = `
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;background:#fff;padding:8mm 10mm;max-width:210mm;margin:0 auto;">
+
+  <!-- ══ HEADER ══════════════════════════════════════════ -->
+  <div style="border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div style="font-size:15pt;font-weight:900;letter-spacing:1px;line-height:1.1;">LIOmetría</div>
+        <div style="font-size:7.5pt;color:#444;">Calculador de Lentes Intraoculares · Para oftalmólogos de Paraguay</div>
+      </div>
+      <div style="text-align:right;font-size:7.5pt;line-height:1.6;">
+        <strong>${inst}</strong><br>${medico}<br>${dateStr} ${timeStr}
+      </div>
+    </div>
+    <!-- Patient strip -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px 12px;font-size:7.5pt;margin-top:5px;padding-top:4px;border-top:1px solid #ccc;">
+      <div><span style="color:#666;">Paciente:</span> <strong>${calc.patName||'---'}</strong></div>
+      <div><span style="color:#666;">Fecha nac.:</span> <strong>${dob}</strong></div>
+      <div><span style="color:#666;">HC / ID:</span> <strong>${calc.patHC||'---'}</strong></div>
+      <div><span style="color:#666;">Lens:</span> <strong>${iol}</strong></div>
+    </div>
+  </div>
+
+  <!-- ══ OD HEADER + BIOMETRY ════════════════════════════ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-bottom:5px;">
+    <div>
+      <div style="display:flex;align-items:baseline;gap:8px;border-bottom:2px solid #000;padding-bottom:3px;margin-bottom:5px;">
+        <span style="font-size:20pt;font-weight:900;line-height:1;">OD</span>
+        <span style="font-size:8pt;color:#444;">derecho</span>
+        <span style="margin-left:auto;font-size:20pt;font-weight:900;line-height:1;">OS</span>
+        <span style="font-size:8pt;color:#444;">izquierdo</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estatus del ojo + biometry side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-bottom:8px;padding-bottom:6px;border-bottom:1.5px solid #555;">
+    <div>${bioSection(edOD)}</div>
+    <div>${bioSection(edOS)}</div>
+  </div>
+
+  <!-- ══ FORMULA TABLES — OD ══════════════════════════════ -->
+  ${edOD ? formulaGrid(edOD, 'OD derecho') : ''}
+
+  <!-- ══ FORMULA TABLES — OS ══════════════════════════════ -->
+  ${edOS ? `<div style="border-top:2px solid #000;margin-top:8px;padding-top:8px;">${formulaGrid(edOS, 'OS izquierdo')}</div>` : ''}
+
+  <!-- ══ LEGEND ══════════════════════════════════════════ -->
+  <div style="margin-top:8px;padding-top:4px;border-top:1px solid #ccc;font-size:6.5pt;color:#666;display:flex;gap:16px;">
+    <span>(!) Valor límite</span>
+    <span>(*) Valor editado manualmente</span>
+    <span>--- No se ha medido</span>
+    <span>★ Fórmula principal recomendada</span>
+  </div>
+
+  <!-- ══ SIGNATURE ═══════════════════════════════════════ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;border-top:1px solid #ccc;padding-top:7px;">
+    <div style="border:1px solid #aaa;height:50px;padding:4px 8px;font-size:7pt;color:#888;">Comentario</div>
+    <div style="border:1px solid #aaa;height:50px;padding:4px 8px;font-size:7pt;color:#888;display:flex;justify-content:space-between;align-items:flex-start;">
+      <span>Firma</span>
+    </div>
+  </div>
+
+  <!-- ══ FOOTER ══════════════════════════════════════════ -->
+  <div style="text-align:center;font-size:6.5pt;color:#999;margin-top:6px;border-top:1px solid #eee;padding-top:4px;">
+    LIOmetría v1.0 &nbsp;·&nbsp; Resultados orientativos. La responsabilidad clínica es exclusiva del médico tratante.
+    &nbsp;·&nbsp; Generado: ${dateStr} ${timeStr}
+  </div>
+
+</div>`;
+
+  const win = window.open('', '_blank', 'width=860,height=1100');
   win.document.write(`<!DOCTYPE html><html lang="es"><head>
     <meta charset="UTF-8">
     <title>LIOmetría — Informe LIO</title>
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: Arial, Helvetica, sans-serif; background: #fff; }
-      .prt { font-size: 9pt; color: #000; padding: 12mm 14mm; }
-      .prt-logo { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
-      .prt-logo h1 { font-size: 16pt; font-weight: bold; letter-spacing: 1px; margin: 0; }
-      .prt-logo .sub { font-size: 8pt; color: #444; margin-top: 2px; }
-      .prt-logo .right { text-align: right; font-size: 8pt; line-height: 1.6; }
-      .prt-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 16px; font-size: 8pt; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #ccc; }
-      .pm-label { color: #555; }
-      .pm-val { font-weight: bold; }
-      .prt-eyes { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-      .prt-eye-head { font-size: 14pt; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 3px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; }
-      .prt-eye-head .side { font-size: 9pt; font-weight: normal; color: #333; }
-      .prt-bio { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 8px; }
-      .prt-bio td { padding: 3px 6px; border: 0.5px solid #bbb; }
-      .prt-bio .bh { background: #ebebeb; font-weight: bold; text-align: center; color: #222; }
-      .prt-bio .bv { text-align: right; font-weight: bold; }
-      .formula-title { font-size: 8.5pt; font-weight: bold; background: #e0e0e0; padding: 3px 6px; border: 1px solid #999; margin-bottom: 3px; margin-top: 6px; }
-      .prt-ft { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 6px; }
-      .prt-ft th { background: #1a1a1a; color: #fff; padding: 3px 6px; text-align: center; font-size: 7.5pt; }
-      .prt-ft td { padding: 3px 6px; border: 0.5px solid #ccc; text-align: center; }
-      .prt-ft tr.rec td { background: #d4edda; font-weight: bold; }
-      .warn { font-size: 7.5pt; color: #555; border-left: 3px solid #aaa; padding-left: 6px; margin: 5px 0; line-height: 1.4; }
-      .toric-box { background: #deedf7; border: 1px solid #7ab3d4; padding: 5px 8px; margin-bottom: 6px; font-size: 8pt; line-height: 1.6; }
-      .prt-sig { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; border-top: 1px solid #ccc; padding-top: 8px; }
-      .sig-box { border: 1px solid #aaa; height: 50px; padding: 5px 8px; font-size: 7.5pt; color: #666; }
-      .prt-footer { text-align: center; font-size: 7pt; color: #888; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 5px; }
-      @media print { @page { margin: 0; } body { margin: 0; } }
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{background:#fff;font-family:Arial,Helvetica,sans-serif;}
+      @media print {
+        @page { margin: 6mm; size: A4 portrait; }
+        body  { margin: 0; }
+      }
     </style>
   </head><body>${html}</body></html>`);
   win.document.close();
   win.focus();
-  setTimeout(() => { win.print(); }, 400);
+  setTimeout(() => { win.print(); }, 500);
 }
+
 
 /* ============================================================
    LIMPIAR
