@@ -640,36 +640,80 @@ function toggleRegForm() {
 async function doRegister() {
   const n = gv('regN'), a = gv('regA'), m = gv('regM'), inst = gv('regI'),
         city = gv('regC'), email = gv('regE').toLowerCase(), pass = gv('regP');
-  if (!n || !a || !m || !email || !pass) { alert('Complete los campos obligatorios (*)'); return; }
-  if (pass.length < 6) { alert('La contraseña debe tener al menos 6 caracteres.'); return; }
+  if (!n || !a || !m || !email || !pass) { notify('Complete todos los campos obligatorios (*).', 'error'); return; }
+  if (pass.length < 6) { notify('La contraseña debe tener mínimo 6 caracteres.', 'error'); return; }
   setLoginStatus('Creando cuenta...', 'info');
+
   // 1. Crear usuario en Supabase Auth
   const { data: authData, error: authErr } = await supa.auth.signUp({ email, password: pass });
-  if (authErr) { setLoginStatus('Error: ' + authErr.message, 'error'); return; }
-  // 2. Guardar perfil en tabla medicos
+  if (authErr) { setLoginStatus('Error al crear cuenta: ' + authErr.message, 'error'); return; }
+  if (!authData?.user) { setLoginStatus('Error inesperado. Intentá nuevamente.', 'error'); return; }
+
+  // 2. Si hay sesión activa (email confirm desactivado), usarla para el INSERT
+  if (authData.session) {
+    await supa.auth.setSession({
+      access_token: authData.session.access_token,
+      refresh_token: authData.session.refresh_token
+    });
+  }
+
+  // 3. INSERT en medicos — requiere sesión activa para satisfacer RLS
   const { error: profErr } = await supa.from('medicos').insert({
-    id: authData.user.id, nombre: n, apellido: a,
-    matricula: m, institucion: inst, ciudad: city
+    id: authData.user.id,
+    nombre: n, apellido: a,
+    matricula: m, institucion: inst || '', ciudad: city
   });
-  if (profErr) { setLoginStatus('Error al guardar perfil: ' + profErr.message, 'error'); return; }
+
+  if (profErr) {
+    if (profErr.code === '42501' || profErr.message.includes('row-level security')) {
+      // Email confirmation pendiente — guardar perfil localmente, completar al primer login
+      try {
+        localStorage.setItem('liometria_pending_profile', JSON.stringify({
+          id: authData.user.id, nombre: n, apellido: a,
+          matricula: m, institucion: inst || '', ciudad: city, email
+        }));
+      } catch(e) {}
+      setLoginStatus('', '');
+      notify('Cuenta creada. Revisá tu correo, confirmá la cuenta y luego ingresá.');
+      toggleRegForm();
+      return;
+    }
+    setLoginStatus('Error al guardar perfil: ' + profErr.message, 'error');
+    return;
+  }
+
   setLoginStatus('', '');
-  alert('Cuenta creada correctamente. Revisá tu correo para confirmar (si Supabase lo requiere) e ingresá con tus datos.');
+  notify('Cuenta creada correctamente. Ingresá con tus datos.');
   toggleRegForm();
 }
 
 async function doLogin() {
   const email = gv('loginEmail').toLowerCase(), pass = gv('loginPass');
-  if (!email || !pass) { alert('Ingresá correo y contraseña.'); return; }
+  if (!email || !pass) { setLoginStatus('Ingresá correo y contraseña.', 'error'); return; }
   setLoginStatus('Ingresando...', 'info');
   const { data, error } = await supa.auth.signInWithPassword({ email, password: pass });
   if (error) { setLoginStatus('Correo o contraseña incorrectos.', 'error'); return; }
+
+  // Verificar si hay perfil pendiente de crear (caso email confirmation)
+  try {
+    const pending = JSON.parse(localStorage.getItem('liometria_pending_profile') || 'null');
+    if (pending && pending.id === data.user.id) {
+      const { error: pe } = await supa.from('medicos').insert({
+        id: pending.id, nombre: pending.nombre, apellido: pending.apellido,
+        matricula: pending.matricula, institucion: pending.institucion, ciudad: pending.ciudad
+      });
+      if (!pe) localStorage.removeItem('liometria_pending_profile');
+    }
+  } catch(e) {}
+
   // Cargar perfil del médico
   const { data: prof, error: profErr } = await supa.from('medicos').select('*').eq('id', data.user.id).single();
-  if (profErr || !prof) { setLoginStatus('No se encontró el perfil. Registrate primero.', 'error'); await supa.auth.signOut(); return; }
+  if (profErr || !prof) { setLoginStatus('No se encontró el perfil médico. Registrate primero.', 'error'); await supa.auth.signOut(); return; }
   user = { ...prof, id: data.user.id, _email: data.user.email };
   setLoginStatus('', '');
   showApp();
 }
+
 
 async function logout() {
   await supa.auth.signOut();
@@ -689,6 +733,26 @@ function setLoginStatus(msg, type) {
   if (!el) { el = document.createElement('p'); el.id = 'loginStatus'; el.style.cssText = 'font-size:12px;margin-top:.5rem;text-align:center'; document.querySelector('#loginForm, #registerForm').parentNode.appendChild(el); }
   el.textContent = msg;
   el.style.color = type === 'error' ? '#993C1D' : type === 'info' ? 'var(--text2)' : 'inherit';
+}
+
+// Reemplaza alert() nativo — compatible con todos los contextos
+function notify(msg, type='info') {
+  // Usar toast en lugar de alert()
+  let toast = document.getElementById('appToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'appToast';
+    toast.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.25);max-width:420px;text-align:center;transition:opacity .3s;';
+    document.body.appendChild(toast);
+  }
+  const isErr = type === 'error';
+  toast.style.background = isErr ? '#FDECEA' : '#EAF3DE';
+  toast.style.color      = isErr ? '#993C1D' : '#27500A';
+  toast.style.border     = isErr ? '1px solid #F0997B' : '1px solid #97C459';
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
 }
 
 function showApp() {
@@ -1136,8 +1200,8 @@ async function saveToHistory() {
     datos_oi: calc.eyes?.OI || null
   });
   if (btn) btn.disabled = false;
-  if (error) { alert('Error al guardar: ' + error.message); return; }
-  alert('Guardado en historial.');
+  if (error) { notify('Error al guardar: ' + error.message, 'error'); return; }
+  notify('Cálculo guardado en el historial.');
 }
 
 /* ============================================================
@@ -1245,10 +1309,10 @@ function loadFromHistory(id) {
 }
 
 async function deleteCalc(id, btn) {
-  if (!confirm('¿Eliminar este cálculo del historial?')) return;
+  if (!window.confirm('¿Eliminar este cálculo del historial?')) return;
   btn.disabled = true;
   const { error } = await supa.from('calculos').delete().eq('id', id);
-  if (error) { alert('Error al eliminar.'); btn.disabled = false; return; }
+  if (error) { notify('Error al eliminar el registro.', 'error'); btn.disabled = false; return; }
   renderHistory();
 }
 
@@ -1467,7 +1531,7 @@ function buildToricBlock(d) {
 }
 
 function printReport() {
-  if (!window._lastCalc) { alert('Primero calculá el LIO.'); return; }
+  if (!window._lastCalc) { notify('Primero realizá un cálculo de LIO.', 'error'); return; }
   const calc = window._lastCalc;
   const mod = calc.mod;
   const modNames = ['Estándar','Tórico','Post-LASIK/PRK','Queratocono','KR'];
