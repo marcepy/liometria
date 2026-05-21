@@ -1047,11 +1047,19 @@ function renderEyeResult(eye, d, aiResult) {
 
   if (curMod === 0) {
     const FNS = { Kane: calcKane, Barrett: calcBarrett, SRKT: calcSRKT, HofferQ: calcHofferQ, Holladay1: calcHolladay1, Haigis: calcHaigis, EVO: calcEVO, PearlDGS: calcPearlDGS, Holladay2: calcHolladay2 };
-    const FNOTES = { Kane:'5ª gen · Requiere AL/K/ACD/LT/CCT/WTW/sexo', Barrett:'5ª gen · Alta precisión', SRKT:'3ª gen · Ojos largos', HofferQ:'3ª gen · Ojos cortos', Holladay1:'3ª gen · General', Haigis:'4ª gen · Requiere ACD', EVO:'5ª gen · Moderna', PearlDGS:'Excelente ojos cortos', Holladay2:'5ª gen · Múltiples params' };
+    const FNOTES = { Kane:'5ª gen · Requiere AL/K/ACD/LT/CCT/WTW/sexo', Barrett:'5ª gen · Alta precisión', SRKT:'3ª gen · Solo AL/K', HofferQ:'3ª gen · Solo AL/K', Holladay1:'3ª gen · General', Haigis:'4ª gen · Requiere ACD medida', EVO:'5ª gen · Requiere ACD medida', PearlDGS:'Requiere ACD medida', Holladay2:'5ª gen · Múltiples params' };
+    const NEEDS_ACD  = new Set(['Haigis','EVO','PearlDGS']);
+    const NEEDS_FULL = new Set(['Kane','Barrett','Holladay2']);
     classicRows = Object.entries(FNS).filter(([k]) => activeF.has(k)).map(([k,fn]) => {
       const v = fn(d);
-      const isKane = k === 'Kane';
-      return v ? `<tr${isKane?' class="rec"':''}><td>${isKane?'<i class="ti ti-math-function" style="font-size:11px"></i> ':''}<strong>${FL[k]}</strong>${isKane?' <span class="badge b-rec">Recomendada</span>':''}</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="color:var(--text2)">${FNOTES[k]}</td><td></td></tr>` : '';
+      const isKane  = k === 'Kane';
+      const noACD   = NEEDS_ACD.has(k) && !d.ACD;
+      const noFull  = NEEDS_FULL.has(k) && (!d.ACD || !d.LT);
+      const dimmed  = noACD || noFull;
+      const warnBadge = noACD ? ' <span class="badge b-kc" style="font-size:9px;padding:1px 5px;">Sin ACD</span>'
+        : noFull ? ' <span class="badge" style="background:#FAEEDA;color:#633806;border-color:#EF9F27;font-size:9px;padding:1px 5px;">Usa valores promedio</span>' : '';
+      const trStyle = dimmed ? ' style="opacity:0.65;"' : '';
+      return v ? `<tr${isKane?' class="rec"':''}${trStyle}><td>${isKane?'<i class="ti ti-math-function" style="font-size:11px"></i> ':''}<strong>${FL[k]}</strong>${isKane?' <span class="badge b-rec">Recomendada</span>':''}${warnBadge}</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="color:var(--text2)">${FNOTES[k]}</td><td></td></tr>` : '';
     }).join('');
   }
   else if (curMod === 1) {
@@ -1150,12 +1158,131 @@ function renderEyeResult(eye, d, aiResult) {
 /* ============================================================
    CALCULAR
    ============================================================ */
+/* ============================================================
+   VALIDACIÓN DE DATOS — verifica parámetros disponibles
+   ============================================================ */
+function validateBio(d, eye) {
+  const eyeLabel = eye === 'OD' ? 'Ojo Derecho' : 'Ojo Izquierdo';
+  const missing = [], warnings = [], incompatible = [];
+
+  // Requeridos mínimos
+  if (!d.AL)  missing.push('AL (Longitud axial)');
+  if (!d.K1)  missing.push('K1 (Queratometría plana)');
+  if (!d.K2)  missing.push('K2 (Queratometría curva)');
+  if (!d.A)   missing.push('Constante A del LIO');
+
+  // Opcionales que afectan fórmulas específicas
+  const missingOpt = [];
+  if (!d.ACD) missingOpt.push('ACD');
+  if (!d.LT)  missingOpt.push('LT');
+  if (!d.CCT) missingOpt.push('CCT');
+  if (!d.WTW) missingOpt.push('WTW');
+
+  // Fórmulas afectadas por datos faltantes
+  const affected = [];
+  if (!d.ACD) affected.push('Haigis (requiere ACD medida)', 'EVO 2.0 (requiere ACD)', 'PEARL-DGS (requiere ACD)');
+  if (!d.ACD || !d.LT) affected.push('Kane 2020 (usará valores promedio para parámetros faltantes)');
+  if (!d.ACD || !d.LT) affected.push('Barrett II (usará valores promedio)');
+
+  // Advertencias clínicas
+  if (d.AL && d.AL < 22.0) warnings.push(`AL corta (${d.AL}mm) — Hoffer Q y PEARL-DGS más precisos`);
+  if (d.AL && d.AL > 26.0) warnings.push(`AL larga (${d.AL}mm) — SRK/T y Haigis más precisos`);
+  if (d.ACD && d.ACD < 2.5) warnings.push(`ACD muy baja (${d.ACD}mm) — verificar medición`);
+  if (d.K1 && d.K2 && Math.abs(d.K2-d.K1) > 3.0) warnings.push(`Astigmatismo corneal elevado (${Math.abs(d.K2-d.K1).toFixed(2)}D) — considerar LIO tórico`);
+
+  return { eyeLabel, missing, missingOpt, affected, warnings, hasMinData: missing.length === 0 };
+}
+
+function buildValidationBanner(valOD, valOS, eyeSel) {
+  const eyes = eyeSel === 'both' ? [valOD, valOS] : eyeSel === 'OD' ? [valOD] : [valOS];
+  let html = '';
+
+  eyes.forEach(v => {
+    if (!v) return;
+    if (!v.hasMinData) {
+      html += `<div style="background:#FDECEA;border:.5px solid #F0997B;border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;">
+        <p style="font-size:12px;font-weight:600;color:#993C1D;margin-bottom:4px;">
+          <i class="ti ti-alert-circle" style="font-size:14px;vertical-align:-2px"></i>
+          ${v.eyeLabel} — Faltan datos obligatorios
+        </p>
+        <ul style="font-size:11px;color:#993C1D;margin-left:16px;">
+          ${v.missing.map(m => `<li>${m}</li>`).join('')}
+        </ul>
+      </div>`;
+      return;
+    }
+
+    let bannerHtml = '';
+
+    // Missing optional params
+    if (v.missingOpt.length > 0) {
+      bannerHtml += `
+        <div style="margin-bottom:6px;">
+          <p style="font-size:11px;font-weight:600;color:#633806;margin-bottom:3px;">
+            <i class="ti ti-info-circle" style="font-size:12px;vertical-align:-1px"></i>
+            Parámetros opcionales no ingresados: <strong>${v.missingOpt.join(', ')}</strong>
+          </p>
+          <p style="font-size:11px;color:#633806;">
+            Las siguientes fórmulas usarán valores promedio poblacionales — resultado menos preciso:
+          </p>
+          <ul style="font-size:11px;color:#633806;margin-left:16px;margin-top:2px;">
+            ${v.affected.map(a => `<li>${a}</li>`).join('')}
+          </ul>
+          <p style="font-size:11px;color:#633806;margin-top:3px;">
+            Fórmulas con datos suficientes: <strong>SRK/T · Hoffer Q · Holladay 1</strong>
+          </p>
+        </div>`;
+    }
+
+    // Clinical warnings
+    if (v.warnings.length > 0) {
+      bannerHtml += `
+        <div>
+          <p style="font-size:11px;font-weight:600;color:#0C447C;margin-bottom:3px;">
+            <i class="ti ti-eye" style="font-size:12px;vertical-align:-1px"></i>
+            Alertas clínicas:
+          </p>
+          <ul style="font-size:11px;color:#0C447C;margin-left:16px;">
+            ${v.warnings.map(w => `<li>${w}</li>`).join('')}
+          </ul>
+        </div>`;
+    }
+
+    if (bannerHtml) {
+      const bg   = v.missingOpt.length > 0 ? '#FAEEDA' : '#E6F1FB';
+      const bdr  = v.missingOpt.length > 0 ? '#EF9F27' : '#378ADD';
+      html += `<div style="background:${bg};border:.5px solid ${bdr};border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;">
+        <p style="font-size:12px;font-weight:600;color:${v.missingOpt.length>0?'#412402':'#0C447C'};margin-bottom:6px;">
+          <i class="ti ti-${v.missingOpt.length>0?'alert-triangle':'info-circle'}" style="font-size:14px;vertical-align:-2px"></i>
+          ${v.eyeLabel}
+        </p>
+        ${bannerHtml}
+      </div>`;
+    }
+  });
+
+  return html;
+}
+
 async function calcAll() {
   if (!user) return;
   const eyeSel = gv('eyeSel'), patName = gv('patName') || 'Paciente';
   const eyes = eyeSel === 'both' ? ['OD','OI'] : [eyeSel];
   const ctxKeys = ['standard','toric','postLasik','kc','rk'];
   const ra = document.getElementById('resultsArea');
+  // Validate biometry before calculating
+  const bioOD = getBio('OD'), bioOS = getBio('OI');
+  const valOD = eyeSel !== 'OI' ? validateBio(bioOD, 'OD') : null;
+  const valOS = eyeSel !== 'OD' ? validateBio(bioOS, 'OI') : null;
+
+  // Block if missing required data
+  const blocked = [valOD, valOS].filter(Boolean).some(v => !v.hasMinData);
+  if (blocked) {
+    document.getElementById('resultsArea').innerHTML =
+      '<div style="margin-top:.75rem;">' + buildValidationBanner(valOD, valOS, eyeSel) + '</div>';
+    return;
+  }
+
   ra.innerHTML = '<div class="loading"><div class="spinner"></div> Calculando...</div>';
 
   let html = `<div style="margin-top:.75rem;">
@@ -1165,7 +1292,8 @@ async function calcAll() {
         <button class="btn btn-s" style="font-size:11px;" onclick="printReport()"><i class="ti ti-printer"></i> Imprimir</button>
         <button class="btn btn-g" style="font-size:11px;" onclick="saveToHistory()"><i class="ti ti-device-floppy"></i> Guardar</button>
       </div>
-    </div>`;
+    </div>
+    ${buildValidationBanner(valOD, valOS, eyeSel)}`;
 
   for (const eye of eyes) {
     const d = getBio(eye);
