@@ -2189,7 +2189,7 @@ function printReport(mode) {
   }
 
   // ── Biometry block ────────────────────────────────────────
-  function bioBlock(d, eye) {
+  function bioBlock(d, eye, spec) {
     if (!d || !d.AL) return '<div style="color:#aaa;font-size:8pt;">Sin datos</div>';
     const K = ((d.K1||0)+(d.K2||0))/2;
     const axK2 = d.Kaxis ? parseInt(d.Kaxis) : null;
@@ -2205,12 +2205,12 @@ function printReport(mode) {
       <b>WTW</b><span>${d.WTW||'---'} mm</span>  <b>Sexo</b><span>${d.Sex==='F'?'Femenino':'Masculino'}</span>
       <b>Cte-A</b><span>${A}</span>              <b>Objetivo</b><span>Refr. dest.: ${fmt(d.T||0,2,true)} D</span>
     </div>
-    ${ed.spec ? `<div style="font-size:7pt;margin-top:4px;padding:3px 6px;background:#f5f5f5;border-radius:4px;color:#333;">
+    ${spec ? `<div style="font-size:7pt;margin-top:4px;padding:3px 6px;background:#f5f5f5;border-radius:4px;color:#333;">
       <b>Microscopía especular:</b>
-      ${ed.spec.CD!=null?`CD: <b style="color:${ed.spec.CD<1000?'#993C1D':ed.spec.CD<2000?'#633806':'#27500A'}">${ed.spec.CD} cél/mm²</b>`:''}&nbsp;
-      ${ed.spec.CV!=null?`CV: <b>${ed.spec.CV}%</b>`:''}&nbsp;
-      ${ed.spec.A6!=null?`6A: <b>${ed.spec.A6}%</b>`:''}&nbsp;
-      ${ed.spec.CCT_esp!=null?`CCT: <b>${ed.spec.CCT_esp} µm</b>`:''}
+      ${spec.CD!=null?`CD: <b style="color:${spec.CD<1000?'#993C1D':spec.CD<2000?'#633806':'#27500A'}">${spec.CD} cél/mm²</b>`:''}&nbsp;
+      ${spec.CV!=null?`CV: <b>${spec.CV}%</b>`:''}&nbsp;
+      ${spec.A6!=null?`6A: <b>${spec.A6}%</b>`:''}&nbsp;
+      ${spec.CCT_esp!=null?`CCT: <b>${spec.CCT_esp} µm</b>`:''}
     </div>` : ''}`;
   }
 
@@ -2279,7 +2279,7 @@ function printReport(mode) {
     ].filter(f => hasF(f.k));
 
     // Build 3-column grid of formula blocks
-    function formulaBlock(label, constStr, emODv, emOSv, targetOD, targetOS) {
+    function formulaBlock(label, constStr, emODv, emOSv, targetOD, targetOS, formulaKey) {
       return `
       <div style="border:1px solid #ccc;padding:3px 5px;flex:1;min-width:0;">
         <div style="font-size:7pt;font-weight:700;border-bottom:1px solid #888;margin-bottom:2px;
@@ -2292,14 +2292,14 @@ function printReport(mode) {
             <table style="width:100%;border-collapse:collapse;font-size:7.5pt;">
               <tr style="background:#ccc;"><th style="padding:1px 4px;text-align:right;font-size:6.5pt;">IOL (D)</th>
                   <th style="padding:1px 4px;text-align:right;font-size:6.5pt;">Res.SE</th></tr>
-              ${rangeRows(emODv, targetOD, '#e8f5e9', f.k)}
+              ${rangeRows(emODv, targetOD, '#e8f5e9', formulaKey)}
             </table>
           </div>
           <div>
             <table style="width:100%;border-collapse:collapse;font-size:7.5pt;">
               <tr style="background:#ccc;"><th style="padding:1px 4px;text-align:right;font-size:6.5pt;">IOL (D)</th>
                   <th style="padding:1px 4px;text-align:right;font-size:6.5pt;">Res.SE</th></tr>
-              ${rangeRows(emOSv, targetOS, '#fce4ec', f.k)}
+              ${rangeRows(emOSv, targetOS, '#fce4ec', formulaKey)}
             </table>
           </div>
         </div>
@@ -2314,7 +2314,7 @@ function printReport(mode) {
         const constStr = (odData||oiData) ? f.const_fn(odData||oiData) : '';
         const emODv = emOD ? emOD[f.k] : null;
         const emOSv = emOS ? emOS[f.k] : null;
-        gridRows += formulaBlock(f.label, constStr, emODv, emOSv, odData?.T||0, oiData?.T||0);
+        gridRows += formulaBlock(f.label, constStr, emODv, emOSv, odData?.T||0, oiData?.T||0, f.k);
       });
       // pad to 3
       for(let p=chunk.length; p<3; p++) gridRows += `<div style="flex:1;"></div>`;
@@ -2332,13 +2332,13 @@ function printReport(mode) {
         <div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">
           OD — Valores biométricos
         </div>
-        ${bioBlock(odData,'OD')}
+        ${bioBlock(odData,'OD', calc.specOD)}
       </div>
       <div>
         <div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">
           OS — Valores biométricos
         </div>
-        ${bioBlock(oiData,'OS')}
+        ${bioBlock(oiData,'OS', calc.specOS)}
       </div>
     </div>
     <!-- Legend OD/OS colors -->
@@ -2464,11 +2464,11 @@ function printReport(mode) {
                 padding-bottom:5px;border-bottom:0.5px solid #ccc;">
       <div>
         <div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">OD — Valores biométricos</div>
-        ${bioBlock(odData,'OD')}
+        ${bioBlock(odData,'OD', calc.specOD)}
       </div>
       <div>
         <div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">OS — Valores biométricos</div>
-        ${bioBlock(oiData,'OS')}
+        ${bioBlock(oiData,'OS', calc.specOS)}
       </div>
     </div>
     <!-- Legend -->
@@ -2483,15 +2483,79 @@ function printReport(mode) {
   // ── BUILD & PRINT ─────────────────────────────────────────
   const body = mode === 'lenses' ? buildLensMode() : buildFormulaMode();
 
+  // ── Helper para bloque de microscopía especular ─────────────
+  function specBlock(spec, eyeLabel) {
+    if (!spec || (!spec.CD && !spec.CV && !spec.A6 && !spec.CCT_esp)) return '';
+    const cdColor = spec.CD != null
+      ? (spec.CD < 1000 ? '#993C1D' : spec.CD < 1500 ? '#993C1D' : spec.CD < 2000 ? '#633806' : '#27500A')
+      : '#333';
+    const items = [
+      spec.CD  != null ? `CD: <b style="color:${cdColor}">${spec.CD} cél/mm²</b>` : '',
+      spec.CV  != null ? `CV: <b>${spec.CV}%</b>` : '',
+      spec.A6  != null ? `6A: <b>${spec.A6}%</b>` : '',
+      spec.CCT_esp != null ? `CCT: <b>${spec.CCT_esp} µm</b>` : '',
+    ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    // Evaluación global
+    let riesgo = 0;
+    if (spec.CD  != null && spec.CD  < 1000) riesgo = 3;
+    else if (spec.CD != null && spec.CD < 1500) riesgo = Math.max(riesgo, 2);
+    else if (spec.CD != null && spec.CD < 2000) riesgo = Math.max(riesgo, 1);
+    if (spec.CV  != null && spec.CV  > 40) riesgo = Math.max(riesgo, 2);
+    else if (spec.CV != null && spec.CV > 33) riesgo = Math.max(riesgo, 1);
+    if (spec.A6  != null && spec.A6  < 40) riesgo = Math.max(riesgo, 2);
+    else if (spec.A6 != null && spec.A6 < 60) riesgo = Math.max(riesgo, 1);
+    const evalLabels = ['Apto', 'Riesgo moderado', 'Riesgo alto', 'Contraindicación relativa'];
+    const evalColors = ['#27500A', '#633806', '#993C1D', '#993C1D'];
+    const evalBgs    = ['#EAF3DE', '#FAEEDA', '#FDECEA', '#FDECEA'];
+    return `<div style="margin-bottom:4px;">
+      <div style="font-size:6.5pt;font-weight:700;color:#444;margin-bottom:2px;">
+        <i>Microscopía especular — ${eyeLabel}</i>
+      </div>
+      <div style="background:${evalBgs[riesgo]};border-radius:4px;padding:3px 7px;font-size:7pt;color:${evalColors[riesgo]};">
+        <b>${evalLabels[riesgo]}</b> &nbsp;·&nbsp; ${items}
+      </div>
+    </div>`;
+  }
+
+  const hasSpecOD = calc.specOD && Object.values(calc.specOD).some(v => v != null);
+  const hasSpecOS = calc.specOS && Object.values(calc.specOS).some(v => v != null);
+  const hasObs    = calc.patObs && calc.patObs.trim().length > 0;
+
   const footer = `
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;border-top:1px solid #ccc;padding-top:6px;">
-    <div style="border:1px solid #aaa;min-height:40px;padding:5px 8px;font-size:7pt;color:#333;">
-      <b style="color:#555;">Observaciones:</b> ${calc.patObs||''}
+  <!-- ══ MICROSCOPÍA + OBSERVACIONES ══════════════════════ -->
+  ${(hasSpecOD || hasSpecOS) ? `
+  <div style="margin-top:10px;border-top:1px solid #ccc;padding-top:7px;">
+    <div style="font-size:7pt;font-weight:700;text-transform:uppercase;color:#555;
+                letter-spacing:.4px;margin-bottom:5px;">
+      Microscopía especular
     </div>
-    <div style="border:1px solid #aaa;height:40px;padding:3px 6px;font-size:7pt;color:#888;">Firma y sello del médico</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">
+      <div>${specBlock(calc.specOD, 'OD derecho')}</div>
+      <div>${specBlock(calc.specOS, 'OS izquierdo')}</div>
+    </div>
+  </div>` : ''}
+
+  <!-- ══ OBSERVACIONES + FIRMA ══════════════════════════════ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;
+              margin-top:8px;border-top:1px solid #ccc;padding-top:7px;">
+    <div style="border:1px solid #bbb;border-radius:5px;min-height:52px;
+                padding:6px 9px;font-size:7.5pt;color:#222;line-height:1.5;">
+      <div style="font-size:6.5pt;font-weight:700;color:#555;margin-bottom:3px;
+                  text-transform:uppercase;letter-spacing:.4px;">Observaciones</div>
+      ${hasObs ? calc.patObs : '<span style="color:#aaa;">—</span>'}
+    </div>
+    <div style="border:1px solid #bbb;border-radius:5px;min-height:52px;
+                padding:6px 9px;font-size:7.5pt;color:#888;">
+      <div style="font-size:6.5pt;font-weight:700;color:#555;margin-bottom:3px;
+                  text-transform:uppercase;letter-spacing:.4px;">Firma y sello del médico</div>
+    </div>
   </div>
-  <div style="text-align:center;font-size:6.5pt;color:#999;margin-top:5px;border-top:1px solid #eee;padding-top:3px;">
-    LIOmetría v1.0 &nbsp;·&nbsp; Resultados orientativos. La responsabilidad clínica es exclusiva del médico tratante.
+
+  <!-- ══ FOOTER ════════════════════════════════════════════ -->
+  <div style="text-align:center;font-size:6.5pt;color:#999;margin-top:6px;
+              border-top:1px solid #eee;padding-top:4px;">
+    LIOmetría v1.0 &nbsp;·&nbsp; Resultados orientativos.
+    La responsabilidad clínica es exclusiva del médico tratante.
     &nbsp;·&nbsp; ${dateStr} ${timeStr}
   </div>`;
 
