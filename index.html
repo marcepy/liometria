@@ -1725,12 +1725,14 @@ renderHistory = async function() {
           ${h.datos_oi?.AL?`<span class="badge" style="background:#FAECE7;color:#4A1B0C;border-color:#F0997B">OI ${h.datos_oi.AL}mm</span>`:''}
           <button onclick="event.stopPropagation(); openDeleteModal(${h.id}, this.dataset.name, this)"
             data-name="${(h.paciente_nombre||'Paciente').replace(/"/g,'&quot;')}"
-            style="background:none;border:.5px solid transparent;border-radius:7px;cursor:pointer;
-                   color:var(--text3);font-size:11px;padding:4px 8px;transition:all .15s;"
+            style="display:flex;align-items:center;gap:4px;background:none;
+                   border:.5px solid var(--border);border-radius:7px;cursor:pointer;
+                   color:var(--text3);font-size:11px;padding:4px 10px;transition:all .15s;"
             onmouseover="this.style.background='#FDECEA';this.style.color='#993C1D';this.style.borderColor='#F0997B'"
-            onmouseout="this.style.background='none';this.style.color='var(--text3)';this.style.borderColor='transparent'"
+            onmouseout="this.style.background='none';this.style.color='var(--text3)';this.style.borderColor='var(--border)'"
             title="Eliminar este cálculo">
             <i class="ti ti-trash" style="font-size:13px"></i>
+            <span>Eliminar</span>
           </button>
         </div>
       </div>
