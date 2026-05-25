@@ -222,6 +222,23 @@
 
   /* FOOTER */
   footer { text-align: center; font-size: 11px; color: var(--text3); padding: 1.5rem 0 1rem; }
+
+  /* INLINE RX EXPAND */
+  .rt tr.formula-row { cursor: pointer; transition: background .12s; }
+  .rt tr.formula-row:hover td { background: var(--bg2); }
+  .rt tr.rx-expand { display: none; }
+  .rt tr.rx-expand.open { display: table-row; }
+  .rx-panel { padding: 8px 12px; background: var(--bg2); border-radius: 8px; }
+  .rx-panel-title { font-size: 10px; font-weight: 700; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .rx-table { border-collapse: collapse; font-size: 11px; width: auto; }
+  .rx-table th { font-size: 10px; font-weight: 600; color: var(--text2); padding: 3px 10px; border-bottom: 1px solid var(--border2); text-align: right; }
+  .rx-table td { padding: 3px 10px; border-bottom: .5px solid var(--border); text-align: right; }
+  .rx-table tr.rx-rec td { background: #EAF3DE; color: #27500A; font-weight: 700; border-radius: 4px; }
+  .rx-table tr.rx-myopic td { color: var(--green); }
+  .rx-table tr.rx-hyperopic td { color: var(--orange); }
+  @media (prefers-color-scheme: dark) {
+    .rx-table tr.rx-rec td { background: #1a3010; color: #C0DD97; }
+  }
 </style>
 </head>
 <body>
@@ -1230,6 +1247,46 @@ function adjustedD_RK(d) {
 
 
 /* ============================================================
+   INLINE RX TABLE — potencias ±1.50 D al hacer clic en fórmula
+   ============================================================ */
+function toggleRxPanel(rowId) {
+  const expandRow = document.getElementById('rxrow_' + rowId);
+  if (!expandRow) return;
+  const isOpen = expandRow.classList.contains('open');
+  // Close all open panels in the same table
+  const table = expandRow.closest('table');
+  if (table) table.querySelectorAll('.rx-expand.open').forEach(r => r.classList.remove('open'));
+  if (!isOpen) expandRow.classList.add('open');
+}
+
+function buildInlineRxTable(emme, target, formulaKey, rowId) {
+  if (emme == null) return '';
+  const VF = { Kane:0.640, Barrett:0.720, SRKT:0.700, HofferQ:0.700,
+               Holladay1:0.700, Holladay2:0.700, Haigis:0.700, EVO:0.700, PearlDGS:0.700 };
+  const vf = VF[formulaKey] || 0.720;
+  const rec = Math.round(emme * 2) / 2; // r2(emme)
+  const steps = [-1.5, -1.0, -0.5, 0.0, +0.5, +1.0, +1.5];
+  const fmt = (v, sign=false) => { const s = Math.abs(v).toFixed(2); return (sign && v>=0?'+':'') + (v<0?'-':'') + s; };
+  const rows = steps.map(s => {
+    const p = Math.round((rec + s) * 2) / 2;
+    const rx = (emme - p) * vf + (target || 0);
+    const isRec = Math.abs(s) < 0.01;
+    const cls = isRec ? 'rx-rec' : (rx < -0.01 ? 'rx-myopic' : rx > 0.01 ? 'rx-hyperopic' : '');
+    return `<tr class="${cls}"><td>${fmt(p, true)} D</td><td>${fmt(rx, true)} D</td></tr>`;
+  }).join('');
+  return `<td colspan="4" style="padding:0;border-bottom:.5px solid var(--border);">
+    <div class="rx-panel">
+      <div class="rx-panel-title"><i class="ti ti-arrows-diff" style="font-size:11px;vertical-align:-1px"></i> Refracción esperada — clic en otra fórmula para comparar</div>
+      <table class="rx-table">
+        <thead><tr><th>Potencia LIO</th><th>Rx Esperada</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="font-size:9px;color:var(--text3);margin-top:4px;">Emetropía exacta: ${fmt(emme,true)} D &nbsp;·&nbsp; Objetivo: ${fmt(target||0,true)} D &nbsp;·&nbsp; Factor vertex: ${vf.toFixed(3)}</div>
+    </div>
+  </td>`;
+}
+
+/* ============================================================
    RENDER RESULTADO
    ============================================================ */
 function renderEyeResult(eye, d, aiResult) {
@@ -1243,6 +1300,8 @@ function renderEyeResult(eye, d, aiResult) {
     const FNOTES = { Kane:'5ª gen · Requiere AL/K/ACD/LT/CCT/WTW/sexo', Barrett:'5ª gen · Alta precisión', SRKT:'3ª gen · Solo AL/K', HofferQ:'3ª gen · Solo AL/K', Holladay1:'3ª gen · General', Haigis:'4ª gen · Requiere ACD medida', EVO:'5ª gen · Requiere ACD medida', PearlDGS:'Requiere ACD medida', Holladay2:'5ª gen · Múltiples params' };
     const NEEDS_ACD  = new Set(['Haigis','EVO','PearlDGS']);
     const NEEDS_FULL = new Set(['Kane','Barrett','Holladay2']);
+    const VF_MAP = { Kane:0.640, Barrett:0.720, SRKT:0.700, HofferQ:0.700,
+                     Holladay1:0.700, Holladay2:0.700, Haigis:0.700, EVO:0.700, PearlDGS:0.700 };
     classicRows = Object.entries(FNS).filter(([k]) => activeF.has(k)).map(([k,fn]) => {
       const v = fn(d);
       const isKane  = k === 'Kane';
@@ -1251,8 +1310,25 @@ function renderEyeResult(eye, d, aiResult) {
       const dimmed  = noACD || noFull;
       const warnBadge = noACD ? ' <span class="badge b-kc" style="font-size:9px;padding:1px 5px;">Sin ACD</span>'
         : noFull ? ' <span class="badge" style="background:#FAEEDA;color:#633806;border-color:#EF9F27;font-size:9px;padding:1px 5px;">Usa valores promedio</span>' : '';
-      const trStyle = dimmed ? ' style="opacity:0.65;"' : '';
-      return v ? `<tr${isKane?' class="rec"':''}${trStyle}><td>${isKane?'<i class="ti ti-math-function" style="font-size:11px"></i> ':''}<strong>${FL[k]}</strong>${isKane?' <span class="badge b-rec">Recomendada</span>':''}${warnBadge}</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="color:var(--text2)">${FNOTES[k]}</td><td></td></tr>` : '';
+      const trStyle = dimmed ? 'opacity:0.65;' : '';
+      if (!v) return '';
+      // Rx esperada con potencia redondeada implantar
+      const P_impl = r2(v);
+      const vf = VF_MAP[k] || 0.720;
+      const rxEst = (v - P_impl) * vf + (d.T || 0);
+      const rxSign = rxEst >= 0 ? '+' : '';
+      const rowId = eye + '_' + k;
+      const dataStyle = trStyle ? ` style="${trStyle}"` : '';
+      const mainRow = `<tr class="formula-row${isKane?' rec':''}"${dataStyle} onclick="toggleRxPanel('${rowId}')" title="Clic para ver refracción esperada por potencia">
+        <td>${isKane?'<i class="ti ti-math-function" style="font-size:11px"></i> ':''}<strong>${FL[k]}</strong>${isKane?' <span class="badge b-rec">Recomendada</span>':''}${warnBadge} <i class="ti ti-chevron-down" style="font-size:10px;color:var(--text3);margin-left:3px;vertical-align:-1px"></i></td>
+        <td style="font-weight:600">${P_impl.toFixed(1)} D</td>
+        <td style="font-weight:600;color:${Math.abs(rxEst)<0.25?'var(--green)':Math.abs(rxEst)<0.75?'var(--text)':'var(--orange)'}">${rxSign}${rxEst.toFixed(2)} D</td>
+        <td style="color:var(--text2);font-size:11px">${FNOTES[k]}</td>
+      </tr>`;
+      const expandRow = `<tr id="rxrow_${rowId}" class="rx-expand">
+        ${buildInlineRxTable(v, d.T || 0, k, rowId)}
+      </tr>`;
+      return mainRow + expandRow;
     }).join('');
   }
   else if (curMod === 1) {
@@ -1276,39 +1352,39 @@ function renderEyeResult(eye, d, aiResult) {
     if (aiResult) {
       aiRow = `<tr class="rec"><td><i class="ti ti-sparkles" style="font-size:11px"></i> IA Tórico <span class="badge b-rec" style="margin-left:4px">Recomendado</span></td>
         <td style="font-weight:600">${aiResult.spherePow?.toFixed(2)||'?'} D esf. + ${aiResult.cylPow?.toFixed(2)||'?'} D cil.</td>
-        <td>Eje ${aiResult.axis||'?'}° · Astig. residual ${aiResult.residualAstig?.toFixed(2)||'?'} D</td>
-        <td style="font-size:11px">${aiResult.confidence==='high'?'Alta':aiResult.confidence==='medium'?'Media':'Baja'}</td></tr>`;
+        <td>—</td>
+        <td>Eje ${aiResult.axis||'?'}° · Astig. residual ${aiResult.residualAstig?.toFixed(2)||'?'} D</td></tr>`;
       aiBox = `<div class="ai-box"><p><i class="ti ti-sparkles" style="font-size:11px"></i> <strong>${aiResult.notes||''}</strong> · Rx est.: ${(aiResult.predicted_ref||0)>=0?'+':''}${aiResult.predicted_ref?.toFixed(2)||'?'} D</p></div>`;
     }
-    if (activeF.has('Barrett_Toric') && tr.spherePow) classicRows += `<tr><td>Barrett Tórico</td><td style="font-weight:600">${r2(tr.spherePow).toFixed(1)} D esf. + ${tr.toricPow.toFixed(2)} D cil.</td><td>Eje ${tr.suggestedAxis}°</td><td></td></tr>`;
-    if (activeF.has('EVO_Toric') && tr.spherePow) { const ev=calcEVO(d); if(ev) classicRows += `<tr><td>EVO Tórico</td><td style="font-weight:600">${r2(ev).toFixed(1)} D esf. + ${r4(tr.toricPow-0.1).toFixed(2)} D cil.</td><td>Eje ${tr.suggestedAxis}°</td><td></td></tr>`; }
-    if (activeF.has('Holladay2_Toric') && tr.spherePow) { const h2=calcHolladay2(d); if(h2) classicRows += `<tr><td>Holladay 2 Tórico</td><td style="font-weight:600">${r2(h2).toFixed(1)} D esf. + ${r4(tr.toricPow+0.05).toFixed(2)} D cil.</td><td>Eje ${tr.suggestedAxis}°</td><td></td></tr>`; }
-    if (activeF.has('Kane_Toric') && tr.spherePow) { const kn=calcKane(d); if(kn) classicRows += `<tr class="rec"><td><i class="ti ti-math-function" style="font-size:11px"></i> <strong>Kane Tórico</strong></td><td style="font-weight:600">${r2(kn).toFixed(1)} D esf. + ${r4(tr.toricPow).toFixed(2)} D cil.</td><td>Eje ${tr.suggestedAxis}°</td><td></td></tr>`; }
+    if (activeF.has('Barrett_Toric') && tr.spherePow) classicRows += `<tr><td>Barrett Tórico</td><td style="font-weight:600">${r2(tr.spherePow).toFixed(1)} D esf. + ${tr.toricPow.toFixed(2)} D cil.</td><td>—</td><td>Eje ${tr.suggestedAxis}°</td></tr>`;
+    if (activeF.has('EVO_Toric') && tr.spherePow) { const ev=calcEVO(d); if(ev) classicRows += `<tr><td>EVO Tórico</td><td style="font-weight:600">${r2(ev).toFixed(1)} D esf. + ${r4(tr.toricPow-0.1).toFixed(2)} D cil.</td><td>—</td><td>Eje ${tr.suggestedAxis}°</td></tr>`; }
+    if (activeF.has('Holladay2_Toric') && tr.spherePow) { const h2=calcHolladay2(d); if(h2) classicRows += `<tr><td>Holladay 2 Tórico</td><td style="font-weight:600">${r2(h2).toFixed(1)} D esf. + ${r4(tr.toricPow+0.05).toFixed(2)} D cil.</td><td>—</td><td>Eje ${tr.suggestedAxis}°</td></tr>`; }
+    if (activeF.has('Kane_Toric') && tr.spherePow) { const kn=calcKane(d); if(kn) classicRows += `<tr class="rec"><td><i class="ti ti-math-function" style="font-size:11px"></i> <strong>Kane Tórico</strong></td><td style="font-weight:600">${r2(kn).toFixed(1)} D esf. + ${r4(tr.toricPow).toFixed(2)} D cil.</td><td>—</td><td>Eje ${tr.suggestedAxis}°</td></tr>`; }
   }
   else if (curMod === 2) {
     const dAdj = adjustedD_postLasik(d);
-    if (activeF.has('BarrettTrueK')) { const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>Barrett True-K</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>K ajustada: ${dAdj._Kadj} D</td><td></td></tr>`; }
-    if (activeF.has('BarrettTrueKNH')) { const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>Barrett True-K (sin hist.)</td><td style="font-weight:600">${r2(r4(v+0.2)).toFixed(1)} D</td><td>Sin datos preop</td><td></td></tr>`; }
-    if (activeF.has('HaigisL') && dAdj.ACD) { const v = calcHaigis(dAdj); if(v) classicRows += `<tr><td>Haigis-L</td><td style="font-weight:600">${r2(r4(v+0.15)).toFixed(1)} D</td><td>Con ajuste Haigis-L</td><td></td></tr>`; }
-    if (activeF.has('Shammas')) { const v = calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3}); if(v) classicRows += `<tr><td>Shammas</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>Corrección empírica K</td><td></td></tr>`; }
-    if (activeF.has('ShammasNH')) { const v = calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3}); if(v) classicRows += `<tr><td>Shammas (sin hist.)</td><td style="font-weight:600">${r2(r4(v+0.25)).toFixed(1)} D</td><td>No requiere datos previos</td><td></td></tr>`; }
-    if (activeF.has('Masket')) { const preRx = gn('preRxSph')||0; const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>Masket</td><td style="font-weight:600">${r2(r4(v + preRx*0.4)).toFixed(1)} D</td><td>Corrección ${(preRx*0.4).toFixed(2)}D por Rx preop</td><td></td></tr>`; }
+    if (activeF.has('BarrettTrueK')) { const v = calcBarrett(dAdj); if(v) { const rx=(v-r2(v))*0.720+(d.T||0); classicRows += `<tr><td>Barrett True-K</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>K ajustada: ${dAdj._Kadj} D</td></tr>`; } }
+    if (activeF.has('BarrettTrueKNH')) { const v = calcBarrett(dAdj); if(v) { const v2=r4(v+0.2); const rx=(v2-r2(v2))*0.720+(d.T||0); classicRows += `<tr><td>Barrett True-K (sin hist.)</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Sin datos preop</td></tr>`; } }
+    if (activeF.has('HaigisL') && dAdj.ACD) { const v = calcHaigis(dAdj); if(v) { const v2=r4(v+0.15); const rx=(v2-r2(v2))*0.700+(d.T||0); classicRows += `<tr><td>Haigis-L</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Con ajuste Haigis-L</td></tr>`; } }
+    if (activeF.has('Shammas')) { const v = calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3}); if(v) { const rx=(v-r2(v))*0.720+(d.T||0); classicRows += `<tr><td>Shammas</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Corrección empírica K</td></tr>`; } }
+    if (activeF.has('ShammasNH')) { const v = calcBarrett({...dAdj,K1:dAdj.K1-0.3,K2:dAdj.K2-0.3}); if(v) { const v2=r4(v+0.25); const rx=(v2-r2(v2))*0.720+(d.T||0); classicRows += `<tr><td>Shammas (sin hist.)</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>No requiere datos previos</td></tr>`; } }
+    if (activeF.has('Masket')) { const preRx = gn('preRxSph')||0; const v = calcBarrett(dAdj); if(v) { const v2=r4(v+preRx*0.4); const rx=(v2-r2(v2))*0.720+(d.T||0); classicRows += `<tr><td>Masket</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Corrección ${(preRx*0.4).toFixed(2)}D por Rx preop</td></tr>`; } }
   }
   else if (curMod === 3) {
     const dAdj = adjustedD_KC(d);
-    if (activeF.has('Kane_KC')) { const v = calcKane_KC(d); if(v) classicRows += `<tr class="rec"><td><i class="ti ti-math-function" style="font-size:11px"></i> <strong>Kane KC</strong> <span class="badge b-rec">Recomendada</span></td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>Fórmula Kane adaptada para KC</td><td></td></tr>`; }
-    if (activeF.has('BarrettTrueK_KC')) { const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>Barrett True-K KC</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>Ajuste KC: +${dAdj._adj}D K</td><td></td></tr>`; }
-    if (activeF.has('Haigis_KC') && dAdj.ACD) { const v = calcHaigis(dAdj); if(v) classicRows += `<tr><td>Haigis (KC)</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>Ajuste por ACD en KC</td><td></td></tr>`; }
-    if (activeF.has('HofferQ_KC')) { const v = calcHofferQ(dAdj); if(v) classicRows += `<tr><td>Hoffer Q (KC)</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>Ajuste suave KC</td><td></td></tr>`; }
+    if (activeF.has('Kane_KC')) { const v = calcKane_KC(d); if(v) { const rx=(v-r2(v))*0.640+(d.T||0); classicRows += `<tr class="rec"><td><i class="ti ti-math-function" style="font-size:11px"></i> <strong>Kane KC</strong> <span class="badge b-rec">Recomendada</span></td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Fórmula Kane adaptada para KC</td></tr>`; } }
+    if (activeF.has('BarrettTrueK_KC')) { const v = calcBarrett(dAdj); if(v) { const rx=(v-r2(v))*0.720+(d.T||0); classicRows += `<tr><td>Barrett True-K KC</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Ajuste KC: +${dAdj._adj}D K</td></tr>`; } }
+    if (activeF.has('Haigis_KC') && dAdj.ACD) { const v = calcHaigis(dAdj); if(v) { const rx=(v-r2(v))*0.700+(d.T||0); classicRows += `<tr><td>Haigis (KC)</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Ajuste por ACD en KC</td></tr>`; } }
+    if (activeF.has('HofferQ_KC')) { const v = calcHofferQ(dAdj); if(v) { const rx=(v-r2(v))*0.700+(d.T||0); classicRows += `<tr><td>Hoffer Q (KC)</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Ajuste suave KC</td></tr>`; } }
   }
   else if (curMod === 4) {
     const dAdj = adjustedD_RK(d);
     const rxAM = gn('rkRxAM')||0, rxPM = gn('rkRxPM')||0;
     const diurnal = Math.abs(rxPM - rxAM);
-    if (activeF.has('BarrettTrueK_RK')) { const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>Barrett True-K (KR)</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td>K ajustada por zona óptica</td><td></td></tr>`; }
-    if (activeF.has('DoubleK')) { const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>Double-K Holladay</td><td style="font-weight:600">${r2(r4(v+0.3)).toFixed(1)} D</td><td>Corrige artefacto ELP en KR</td><td></td></tr>`; }
-    if (activeF.has('HaigisL_RK') && dAdj.ACD) { const v = calcHaigis(dAdj); if(v) classicRows += `<tr><td>Haigis-L (KR)</td><td style="font-weight:600">${r2(r4(v+0.25)).toFixed(1)} D</td><td>Ajuste Haigis para KR</td><td></td></tr>`; }
-    if (activeF.has('ASCRS_KR')) { const v = calcBarrett(dAdj); if(v) classicRows += `<tr><td>ASCRS KR formula</td><td style="font-weight:600">${r2(r4(v+0.15)).toFixed(1)} D</td><td>Promedio ASCRS post-KR</td><td></td></tr>`; }
+    if (activeF.has('BarrettTrueK_RK')) { const v = calcBarrett(dAdj); if(v) { const rx=(v-r2(v))*0.720+(d.T||0); classicRows += `<tr><td>Barrett True-K (KR)</td><td style="font-weight:600">${r2(v).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>K ajustada por zona óptica</td></tr>`; } }
+    if (activeF.has('DoubleK')) { const v = calcBarrett(dAdj); if(v) { const v2=r4(v+0.3); const rx=(v2-r2(v2))*0.720+(d.T||0); classicRows += `<tr><td>Double-K Holladay</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Corrige artefacto ELP en KR</td></tr>`; } }
+    if (activeF.has('HaigisL_RK') && dAdj.ACD) { const v = calcHaigis(dAdj); if(v) { const v2=r4(v+0.25); const rx=(v2-r2(v2))*0.700+(d.T||0); classicRows += `<tr><td>Haigis-L (KR)</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Ajuste Haigis para KR</td></tr>`; } }
+    if (activeF.has('ASCRS_KR')) { const v = calcBarrett(dAdj); if(v) { const v2=r4(v+0.15); const rx=(v2-r2(v2))*0.720+(d.T||0); classicRows += `<tr><td>ASCRS KR formula</td><td style="font-weight:600">${r2(v2).toFixed(1)} D</td><td style="font-weight:600">${rx>=0?'+':''}${rx.toFixed(2)} D</td><td>Promedio ASCRS post-KR</td></tr>`; } }
     if (diurnal > 1.5) classicRows += `<tr class="warn"><td colspan="4" style="color:#412402"><i class="ti ti-alert-triangle" style="font-size:12px; vertical-align:-1px"></i> Variación diurna de ${diurnal.toFixed(2)}D — inestabilidad refractiva significativa. Considerar mayor margen de objetivo.</td></tr>`;
   }
 
@@ -1331,7 +1407,7 @@ function renderEyeResult(eye, d, aiResult) {
     </div>
     ${toricBlock}
     <table class="rt">
-      <thead><tr><th>Fórmula</th><th>Potencia LIO</th><th>Nota clínica</th><th>Confianza</th></tr></thead>
+      <thead><tr><th>Fórmula</th><th>Potencia LIO</th><th>Rx Esp.</th><th>Nota clínica</th></tr></thead>
       <tbody>${aiRow}${classicRows}</tbody>
     </table>
     ${aiBox}
