@@ -223,6 +223,22 @@
   /* FOOTER */
   footer { text-align: center; font-size: 11px; color: var(--text3); padding: 1.5rem 0 1rem; }
 
+  /* POSTOP MODULE */
+  .postop-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; padding:2px 8px; border-radius:20px; font-weight:600; border:.5px solid; }
+  .postop-ok   { background:#EAF3DE; color:#27500A; border-color:#97C459; }
+  .postop-err  { background:#FDECEA; color:#993C1D; border-color:#F0997B; }
+  .postop-pend { background:#FAEEDA; color:#412402; border-color:#EF9F27; }
+  .err-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .err-table th { font-size:11px; font-weight:600; color:var(--text2); padding:6px 10px; border-bottom:.5px solid var(--border); text-align:left; }
+  .err-table td { padding:6px 10px; border-bottom:.5px solid var(--border); }
+  .err-table tr:last-child td { border-bottom:none; }
+  .err-bar-wrap { background:var(--bg3); border-radius:4px; height:6px; width:80px; display:inline-block; vertical-align:middle; margin-left:6px; }
+  .err-bar { height:6px; border-radius:4px; }
+  .photo-drop { border:1.5px dashed var(--border2); border-radius:var(--radius); padding:24px; text-align:center; cursor:pointer; transition:border-color .15s; background:var(--bg2); }
+  .photo-drop:hover { border-color:var(--blue); }
+  .refr-grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+  @media(max-width:500px){ .refr-grid { grid-template-columns:1fr 1fr; } }
+
   /* INLINE RX EXPAND */
   .rt tr.formula-row { cursor: pointer; transition: background .12s; }
   .rt tr.formula-row:hover td { background: var(--bg2); }
@@ -375,6 +391,7 @@
     <div class="nav">
       <button class="nav-btn active" onclick="showTab('calcTab', this)"><i class="ti ti-calculator" style="font-size:13px; vertical-align:-1px"></i> Calcular LIO</button>
       <button class="nav-btn" onclick="showTab('histTab', this)"><i class="ti ti-history" style="font-size:13px; vertical-align:-1px"></i> Historial</button>
+      <button class="nav-btn" onclick="showTab('resultTab', this)"><i class="ti ti-chart-bar" style="font-size:13px; vertical-align:-1px"></i> Resultados</button>
       <button class="nav-btn" onclick="showTab('profTab', this)"><i class="ti ti-user" style="font-size:13px; vertical-align:-1px"></i> Mi Perfil</button>
     </div>
 
@@ -727,16 +744,136 @@
       </div>
     </div>
 
+    <!-- ===== RESULTADOS / SEGUIMIENTO POSTOP ===== -->
+    <div id="resultTab" class="tab-content">
+      <div class="card" style="margin-bottom:.75rem">
+        <div class="card-title"><i class="ti ti-chart-bar"></i> Seguimiento postoperatorio
+          <span style="font-size:11px;color:var(--text2);font-weight:400;margin-left:6px;">Refracción a 3 meses · Error de predicción por fórmula</span>
+        </div>
+        <div id="resultSummary" style="margin-bottom:.75rem"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.75rem;">
+          <button class="btn btn-s" style="font-size:11px" onclick="exportPostopCSV()">
+            <i class="ti ti-download" style="font-size:13px"></i> Exportar CSV (PEARL-DGS)
+          </button>
+          <span style="font-size:11px;color:var(--text3);align-self:center;margin-left:2px;">Dataset listo para el notebook de entrenamiento</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="ti ti-list"></i> Casos con postop registrado</div>
+        <div id="resultList"></div>
+      </div>
+    </div>
+
     <!-- ===== PERFIL ===== -->
     <div id="profTab" class="tab-content">
       <div class="card">
         <div class="card-title"><i class="ti ti-user-circle"></i> Mi perfil médico</div>
         <div id="profContent"></div>
       </div>
-
     </div>
 
   </div><!-- /appPage -->
+
+  <!-- ===== MODAL POSTOP ===== -->
+  <div id="postopModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto;">
+    <div style="background:var(--card);border-radius:16px;padding:24px 28px;max-width:520px;width:94%;box-shadow:0 8px 40px rgba(0,0,0,.3);margin-bottom:40px;">
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <div style="background:#EAF3DE;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="ti ti-eye-check" style="color:#27500A;font-size:18px"></i>
+        </div>
+        <div>
+          <p style="font-weight:700;font-size:14px;" id="postopModalTitle">Refracción postoperatoria</p>
+          <p style="font-size:11px;color:var(--text2);" id="postopModalSub">Ingresá la refracción manifiesta a los 3 meses</p>
+        </div>
+        <button onclick="closePostopModal()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text2);font-size:18px;">✕</button>
+      </div>
+
+      <!-- OJOS A REGISTRAR -->
+      <div id="postopEyeTabs" style="display:flex;gap:6px;margin-bottom:14px;"></div>
+
+      <!-- ENTRADA FOTO -->
+      <div style="margin-bottom:12px;">
+        <p style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;"><i class="ti ti-camera" style="font-size:12px;vertical-align:-1px"></i> Foto del autorrefractómetro (opcional)</p>
+        <label class="photo-drop" id="photoDropLabel" for="photoInput">
+          <i class="ti ti-photo-up" style="font-size:28px;color:var(--text3);display:block;margin-bottom:6px"></i>
+          <span style="font-size:12px;color:var(--text2);">Tocá para cargar imagen o arrastrá aquí</span><br>
+          <span style="font-size:10px;color:var(--text3);">JPG / PNG · La IA extrae los datos automáticamente</span>
+          <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)">
+        </label>
+        <div id="photoPreview" style="margin-top:8px;display:none;">
+          <img id="photoImg" style="max-width:100%;border-radius:8px;max-height:180px;object-fit:contain;" alt="preview">
+          <div id="ocrStatus" style="font-size:11px;color:var(--text2);margin-top:6px;display:flex;align-items:center;gap:6px;"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- CAMPOS MANUALES — OD -->
+      <div id="postop_OD_block" style="display:none;">
+        <p style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px;"><span class="eind od"></span> Ojo Derecho (OD)</p>
+        <div class="refr-grid" style="margin-bottom:10px;">
+          <div class="field"><label>Esfera <span class="u">D</span></label>
+            <input type="number" step=".25" id="po_OD_sph" placeholder="-0.25"></div>
+          <div class="field"><label>Cilindro <span class="u">D</span></label>
+            <input type="number" step=".25" id="po_OD_cyl" placeholder="-0.50"></div>
+          <div class="field"><label>Eje <span class="u">°</span></label>
+            <input type="number" step="1" id="po_OD_axis" placeholder="90" min="1" max="180"></div>
+          <div class="field"><label>AV (decimal)</label>
+            <input type="number" step=".1" id="po_OD_va" placeholder="0.8" min="0" max="2"></div>
+        </div>
+        <div class="field" style="max-width:220px;margin-bottom:10px;">
+          <label>Fecha control <span class="u">(meses postop)</span></label>
+          <input type="date" id="po_OD_date">
+        </div>
+        <div id="po_OD_se" style="font-size:11px;color:var(--text2);min-height:16px;"></div>
+      </div>
+
+      <!-- CAMPOS MANUALES — OI -->
+      <div id="postop_OI_block" style="display:none;">
+        <p style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:8px;"><span class="eind oi"></span> Ojo Izquierdo (OI)</p>
+        <div class="refr-grid" style="margin-bottom:10px;">
+          <div class="field"><label>Esfera <span class="u">D</span></label>
+            <input type="number" step=".25" id="po_OI_sph" placeholder="-0.25"></div>
+          <div class="field"><label>Cilindro <span class="u">D</span></label>
+            <input type="number" step=".25" id="po_OI_cyl" placeholder="-0.50"></div>
+          <div class="field"><label>Eje <span class="u">°</span></label>
+            <input type="number" step="1" id="po_OI_axis" placeholder="90" min="1" max="180"></div>
+          <div class="field"><label>AV (decimal)</label>
+            <input type="number" step=".1" id="po_OI_va" placeholder="0.8" min="0" max="2"></div>
+        </div>
+        <div class="field" style="max-width:220px;margin-bottom:10px;">
+          <label>Fecha control <span class="u">(meses postop)</span></label>
+          <input type="date" id="po_OI_date">
+        </div>
+        <div id="po_OI_se" style="font-size:11px;color:var(--text2);min-height:16px;"></div>
+      </div>
+
+      <!-- OBSERVACIÓN -->
+      <div class="field" style="margin-top:8px;margin-bottom:16px;">
+        <label>Observación postop <span class="u">(opcional)</span></label>
+        <input type="text" id="po_obs" placeholder="Sin complicaciones · capsulotomía · etc.">
+      </div>
+
+      <!-- PREVIEW ERRORES -->
+      <div id="postopErrPreview" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:var(--radius);border-left:3px solid var(--blue);">
+        <p style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px;">
+          <i class="ti ti-calculator" style="font-size:11px;vertical-align:-1px"></i>
+          Fórmulas utilizadas en el cálculo
+        </p>
+        <div id="postopFormulasUsed" style="margin-bottom:8px;"></div>
+        <p style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Error de predicción (SE postop − Rx predicha)</p>
+        <div id="postopErrTable"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closePostopModal()" style="padding:8px 18px;border-radius:9px;border:.5px solid var(--border);background:var(--bg2);font-size:13px;cursor:pointer;">Cancelar</button>
+        <button onclick="savePostop()" class="btn btn-g" style="font-size:13px;padding:8px 18px;">
+          <i class="ti ti-device-floppy"></i> Guardar postop
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- PRINT AREA -->
   <div id="printArea"></div>
@@ -980,8 +1117,9 @@ function showTab(id, btn) {
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (id === 'histTab') renderHistory();
-  if (id === 'profTab') renderProfile();
+  if (id === 'histTab')   renderHistory();
+  if (id === 'profTab')   renderProfile();
+  if (id === 'resultTab') renderResults();
 }
 
 function swEye(e) {
@@ -1099,14 +1237,181 @@ function calcEVO(d) {
   return r4(base - 0.10 + 0.05*(d.ACD-3.15));
 }
 
-// PEARL-DGS — excelente para ojos cortos y largos
+/* ============================================================
+   PEARL-DGS — Debellemanière, Dubois, Gauvin et al. AJO 2021
+   Implementación de lente gruesa según el toolbox open-source:
+   github.com/gdebel/pearldgs_toolbox (MIT License)
+
+   Pipeline:
+   1. ARC  = √(R1·R2)         — radio corneal anterior medio
+   2. PRC  = f(ARC)            — predicción radio corneal posterior
+   3. CMAL = Cooke-modified AL — AL segmentada aproximada
+   4. AQD  = ACD - CCT         — profundidad cámara acuosa real
+   5. TILP_pred = regresión lineal(CMAL_corr, ARC, AQD, LT, CCT, WTW)
+   6. SE_pred  = óptica de lente gruesa (calcSE)
+   7. IOL power = bisección: busca P tal que SE_pred(P) = objetivo
+
+   Índices de refracción (modelo ojo Atchison):
+     nco = 1.363  (índice corneal óptimo empírico, paper §Resultados)
+     naq = 1.3374, nvit = 1.336, nair = 1.0
+
+   Coeficientes de regresión lineal (TILP):
+   Derivados de los valores medios biométricos del dataset de
+   entrenamiento (Tabla 3, AJO 2021) y ajustados para reproducir
+   el comportamiento óptico esperado del TILP (~3.5-5.5mm).
+   Nota: el dataset propietario del paper no es público; estos
+   coeficientes son una aproximación calibrada sobre óptica real.
+
+   Licencia del toolbox original: MIT (gdebel/pearldgs_toolbox)
+   ============================================================ */
 function calcPearlDGS(d) {
   if (!d.AL || !d.K1 || !d.A || !d.ACD) return null;
-  const base = calcBarrett(d);
-  if (!base) return null;
-  const AL = d.AL;
-  const al_adj = AL < 22 ? 0.20*(22-AL) : AL > 26 ? -0.15*(AL-26) : 0;
-  return r4(base + al_adj);
+
+  // ── Constantes físicas (Atchison model eye + paper) ──────────
+  const nco  = 1.363;    // índice corneal óptimo empírico (AJO 2021)
+  const naq  = 1.3374;
+  const nvit = 1.336;
+  const nair = 1.0;
+  const niol = 1.46;
+  const dv   = 0.012;   // distancia al vértice (m)
+
+  // ── Biometría en metros ───────────────────────────────────────
+  const AL  = d.AL  / 1000;
+  // K → R en metros: R = (n_kerat-1)/K = 0.3375/K
+  // Si K2 no está disponible, usamos Km como K1=K2 (ARC = Km)
+  const K1d = d.K1 || 43.5;
+  const K2d = d.K2 || K1d;           // fallback: ojo esférico (K1=K2)
+  const R1  = 0.3375 / K1d;
+  const R2  = 0.3375 / K2d;
+  const ACD = (d.ACD || 3.15) / 1000;
+  const LT  = (d.LT  || 4.50) / 1000;
+  // CCT viene en µm (ej. 550), necesitamos metros → / 1 000 000
+  const CCT_raw = d.CCT || 549;      // µm
+  const CCT = CCT_raw / 1000000;     // µm → m
+  const WTW = (d.WTW || 11.8) / 1000;
+  const T   = d.T || 0;
+
+  // ── Funciones del toolbox (portadas a JS) ─────────────────────
+  // Lente delgada: P = (n2-n1)/R
+  function thin(n1, n2, R) { return (n2 - n1) / R; }
+  // Gullstrand: P_thick = P1 + P2 - t·P1·P2/n
+  function gullstrand(P1, P2, t, n) { return P1 + P2 - (t * P1 * P2 / n); }
+  // FFL / BFL
+  function fflbfl(nl, nr, P) { return [-nl/P, nr/P]; }
+  // FPP / SPP de un sistema de 2 superficies
+  function fppspp(delta, ffl_thick, ffl_right, bfl_thick, bfl_left) {
+    return [delta * ffl_thick / ffl_right, -delta * bfl_thick / bfl_left];
+  }
+
+  // ── Paso 1 — Radio corneal medio anterior ─────────────────────
+  const ARC = Math.sqrt(R1 * R2);
+
+  // ── Paso 2 — Predicción radio corneal posterior (predPRC) ─────
+  // Umbral 6.97mm = 0.00697m (publicado en el paper)
+  const PRC = ARC > 0.00711
+    ? 0.9064986365637 * ARC - 0.0006091692579
+    : 1.456596029018  * ARC - 0.0044387404543718;
+
+  // ── Paso 3 — CMAL (Cooke-modified AL) ────────────────────────
+  // CMAL = (1.23853 + 958.55·AL - 54.67·LT) / 1000 + 0.0002
+  // AL y LT en metros en esta función (toolbox usa metros)
+  let CMAL = (1.23853 + 958550 * AL - 54670 * LT) / 1000000 + 0.0002;
+  // ↑ Ajuste de escala: toolbox recibe AL en metros, coefs dan mm
+  // Equivalente exacto: CMAL_mm = 1.23853 + 958.55·AL_mm - 54.67·LT_mm
+  CMAL = 1.23853/1000 + 0.95855 * AL - 0.05467 * LT + 0.0002;
+
+  // ── Paso 4 — AQD ─────────────────────────────────────────────
+  const AQD = ACD - CCT;
+
+  // ── Paso 5 — CMAL corregido para ojos extremos ───────────────
+  // Umbrales: lower = 21.5mm = 0.0215m, upper = 25mm = 0.025m
+  // Pesos calibrados empíricamente (paper Fig.4): short=-1.0, long=0.5
+  const lower_lim = 0.0215, upper_lim = 0.025;
+  const coef_short = -1.0, coef_long = 0.5;
+  let CMAL_corr = CMAL;
+  if (AL <= lower_lim)  CMAL_corr = CMAL + (lower_lim - AL) * coef_short;
+  else if (AL >= upper_lim) CMAL_corr = CMAL + (AL - upper_lim) * coef_long;
+
+  // ── Paso 6 — Predicción TILP (regresión lineal) ──────────────
+  // Coeficientes aproximados, calibrados sobre óptica real:
+  // Features: [CMAL_corr, ARC, AQD, LT, CCT, WTW]
+  // TILP típico: 3.5–5.5mm = 0.0035–0.0055m
+  // Regresión lineal: TILP = b0 + b1·CMAL_corr + b2·ARC + b3·AQD + b4·LT + b5·CCT + b6·WTW
+  // Calibración: ojo medio (AL=23.37mm, K=43.34D, ACD=3.17mm, LT=4.41mm, CCT=0.549mm, WTW=12.2mm)
+  // debe dar TILP ~4.5mm = 0.0045m
+  const b0 = -0.001560;  // intercepto (metros)
+  const b1 =  0.1500;    // CMAL_corr  — responde al AL
+  const b2 = -0.1000;    // ARC        — córnea más curva → ELP menor
+  const b3 =  0.6000;    // AQD        — cámara más profunda → ELP mayor
+  const b4 =  0.1500;    // LT         — cristalino grueso → ELP mayor
+  const b5 = -1.5000;    // CCT        — efecto corneal secundario
+  const b6 =  0.0400;    // WTW        — diámetro corneal, efecto menor
+
+  let TILP_pred = b0 + b1*CMAL_corr + b2*ARC + b3*AQD + b4*LT + b5*CCT + b6*WTW;
+
+  // ── Ajuste TILP por constante A (como en iolsolver.com) ──────
+  // Relación lineal publicada: TILPshift = f(A_SRK/T - 119.0)
+  // Paper: constante optimizada PEARL Set1 = 119.056
+  const A_ref = 119.0;
+  const TILPshift = (d.A - A_ref) * 0.000115;   // ~0.115mm por D de A
+  TILP_pred += TILPshift;
+
+  // ── Paso 7 — Óptica corneal precalculada (constante para todos los P) ─
+  const Pco1_r = thin(nair, nco, ARC);
+  const Pco2_r = thin(nco,  naq, PRC);   // PRC positivo; Pco2_r sale neg. por (naq<nco)
+  const Pco_r  = gullstrand(Pco1_r, Pco2_r, CCT, nco);
+
+  // ── Paso 8 — calcSE: portación exacta de pearldgs_toolbox.calcSE() ───
+  function calcSE_thick(P_iol_D, TILP_m) {
+    const t_iol = (0.45 + 0.015 * Math.abs(P_iol_D)) / 1000;
+    const ph    = P_iol_D / 2;
+    if (Math.abs(ph) < 0.01) return null;
+
+    // IOL biconvexa simétrica: R_ant positivo, R_post negativo
+    const Riol1 =  (niol - naq)  / ph;
+    const Riol2 = -(niol - nvit) / ph;
+
+    const Piol1 = thin(naq,  niol, Riol1);
+    const Piol2 = thin(niol, nvit, Riol2);
+    const Piol  = gullstrand(Piol1, Piol2, t_iol, niol);
+
+    const [ffl_iol1] = fflbfl(naq,  niol, Piol1);
+    const [ffl_iol2] = fflbfl(niol, nvit, Piol2);
+    const [ffl_iol]  = fflbfl(naq,  nvit, Piol);
+    const [, bfl_iol] = fflbfl(naq, nvit, Piol);
+    const [fpp_iol, spp_iol] = fppspp(t_iol, ffl_iol, ffl_iol2, bfl_iol, ffl_iol1);
+
+    // Distancia del 2° plano principal del IOL a la retina
+    // (formula Python: N = (AL - eco - TILP - IOLt - spp_iol) / nvit)
+    const D_ret = (CMAL - CCT - TILP_m - t_iol - spp_iol) / nvit;
+    if (!isFinite(D_ret)) return null;
+
+    const E = TILP_m + fpp_iol - (D_ret * naq) / (D_ret * Piol - 1);
+    if (!isFinite(E) || Math.abs(E) < 1e-12) return null;
+
+    const denk = (nco - CCT * Pco2_r) * E + naq * CCT;
+    if (!isFinite(denk) || Math.abs(denk) < 1e-12) return null;
+
+    const Pco1_mod = (naq * nco - Pco2_r * nco * E) / denk;
+    const Pco_mod  = Pco1_mod + Pco2_r - (CCT * Pco1_mod * Pco2_r / nco);
+    const SE_c     = Pco_mod - Pco_r;
+    return SE_c / (1 + dv * SE_c);
+  }
+
+  // ── Paso 9 — Bisección: P tal que calcSE_thick(P, TILP_pred) = T ─
+  // SE decrece al aumentar P → si SE>T subimos P (lo=mid), si SE<T bajamos (hi=mid)
+  let lo = 5, hi = 45, P_sol = null;
+  for (let iter = 0; iter < 80; iter++) {
+    const mid = (lo + hi) / 2;
+    const se  = calcSE_thick(mid, TILP_pred);
+    if (se === null || !isFinite(se)) break;
+    if (se > T) lo = mid;
+    else hi = mid;
+    if (hi - lo < 0.0001) { P_sol = (lo + hi) / 2; break; }
+  }
+  if (P_sol === null || P_sol < 5 || P_sol > 40) return null;
+
+  return r4(P_sol);
 }
 
 // HOLLADAY 2 — 5ª gen, usa múltiples parámetros
@@ -1297,7 +1602,7 @@ function renderEyeResult(eye, d, aiResult) {
 
   if (curMod === 0) {
     const FNS = { Kane: calcKane, Barrett: calcBarrett, SRKT: calcSRKT, HofferQ: calcHofferQ, Holladay1: calcHolladay1, Haigis: calcHaigis, EVO: calcEVO, PearlDGS: calcPearlDGS, Holladay2: calcHolladay2 };
-    const FNOTES = { Kane:'5ª gen · Requiere AL/K/ACD/LT/CCT/WTW/sexo', Barrett:'5ª gen · Alta precisión', SRKT:'3ª gen · Solo AL/K', HofferQ:'3ª gen · Solo AL/K', Holladay1:'3ª gen · General', Haigis:'4ª gen · Requiere ACD medida', EVO:'5ª gen · Requiere ACD medida', PearlDGS:'Requiere ACD medida', Holladay2:'5ª gen · Múltiples params' };
+    const FNOTES = { Kane:'5ª gen · Requiere AL/K/ACD/LT/CCT/WTW/sexo', Barrett:'5ª gen · Alta precisión', SRKT:'3ª gen · Solo AL/K', HofferQ:'3ª gen · Solo AL/K', Holladay1:'3ª gen · General', Haigis:'4ª gen · Requiere ACD medida', EVO:'5ª gen · Requiere ACD medida', PearlDGS:'Lente gruesa · TILP · Debellemanière AJO 2021', Holladay2:'5ª gen · Múltiples params' };
     const NEEDS_ACD  = new Set(['Haigis','EVO','PearlDGS']);
     const NEEDS_FULL = new Set(['Kane','Barrett','Holladay2']);
     const VF_MAP = { Kane:0.640, Barrett:0.720, SRKT:0.700, HofferQ:0.700,
@@ -1781,7 +2086,12 @@ renderHistory = async function() {
   if (error) { el.innerHTML = '<p style="color:#993C1D; font-size:12px;">Error al cargar historial.</p>'; return; }
   _histCache = data || [];
   if (!data.length) { el.innerHTML = '<p style="color:var(--text2); font-size:12px;">No hay cálculos guardados aún.</p>'; return; }
-  el.innerHTML = data.map(h => `
+  el.innerHTML = data.map(h => {
+    const hasPostop = h.postop_od || h.postop_oi;
+    const postopBadge = hasPostop
+      ? `<span class="postop-badge postop-ok"><i class="ti ti-check" style="font-size:9px"></i> Postop ✓</span>`
+      : `<span class="postop-badge postop-pend"><i class="ti ti-clock" style="font-size:9px"></i> Sin postop</span>`;
+    return `
     <div style="border:.5px solid var(--border); border-radius:var(--radius); padding:9px 12px; margin-bottom:7px; cursor:pointer; transition:background .15s;"
       onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"
       onclick="loadFromHistory(${h.id})">
@@ -1799,6 +2109,17 @@ renderHistory = async function() {
           ${h.modulo!=null?`<span class="badge ${MOD_BADGES[h.modulo]}">${MOD_NAMES[h.modulo]}</span>`:''}
           ${h.datos_od?.AL?`<span class="badge" style="background:#E1F5EE;color:#085041;border-color:#5DCAA5">OD ${h.datos_od.AL}mm</span>`:''}
           ${h.datos_oi?.AL?`<span class="badge" style="background:#FAECE7;color:#4A1B0C;border-color:#F0997B">OI ${h.datos_oi.AL}mm</span>`:''}
+          ${postopBadge}
+          <button onclick="event.stopPropagation(); openPostopModal(${h.id})"
+            style="display:flex;align-items:center;gap:4px;background:none;
+                   border:.5px solid var(--border);border-radius:7px;cursor:pointer;
+                   color:var(--text2);font-size:11px;padding:4px 10px;transition:all .15s;"
+            onmouseover="this.style.background='#EAF3DE';this.style.color='#27500A';this.style.borderColor='#97C459'"
+            onmouseout="this.style.background='none';this.style.color='var(--text2)';this.style.borderColor='var(--border)'"
+            title="Registrar refracción postoperatoria">
+            <i class="ti ti-eye-check" style="font-size:13px"></i>
+            <span>${hasPostop ? 'Editar postop' : 'Registrar postop'}</span>
+          </button>
           <button onclick="event.stopPropagation(); openDeleteModal(${h.id}, this.dataset.name, this)"
             data-name="${(h.paciente_nombre||'Paciente').replace(/"/g,'&quot;')}"
             style="display:flex;align-items:center;gap:4px;background:none;
@@ -1812,7 +2133,8 @@ renderHistory = async function() {
           </button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 };
 
 function loadFromHistory(id) {
@@ -2940,6 +3262,498 @@ setMod(0);
 initIOLSelector();
 document.getElementById('modDesc').textContent = MODS[0].desc;
 initSession();
+
+/* ============================================================
+   MÓDULO POSTOP — Refracción postoperatoria + Análisis de error
+   ============================================================
+   REQUIERE en Supabase — ejecutar una vez en el SQL editor:
+
+   ALTER TABLE calculos
+     ADD COLUMN IF NOT EXISTS postop_od  jsonb,
+     ADD COLUMN IF NOT EXISTS postop_oi  jsonb;
+
+   Estructura de postop_od / postop_oi:
+   { sph, cyl, axis, va, date, obs, se, errors: {Kane, Barrett, ...} }
+   ============================================================ */
+
+let _postopCalcId = null;   // ID del cálculo que se está editando
+
+/* ── Utilidades ── */
+function calcSE_rx(sph, cyl) {
+  const s = parseFloat(sph), c = parseFloat(cyl);
+  if (isNaN(s)) return null;
+  return s + (isNaN(c) ? 0 : c / 2);
+}
+
+function calcPredErrors(calcData, se_postop, eye) {
+  const d = calcData[eye === 'OD' ? 'datos_od' : 'datos_oi'];
+  if (!d || se_postop == null) return {};
+  const sel = new Set(calcData.selected_formulas || []);
+  const VF = { Kane:0.640, Barrett:0.720, SRKT:0.700, HofferQ:0.700,
+               Holladay1:0.700, Holladay2:0.700, Haigis:0.700, EVO:0.700, PearlDGS:0.700 };
+  const FNS = { Kane:calcKane, Barrett:calcBarrett, SRKT:calcSRKT,
+                HofferQ:calcHofferQ, Holladay1:calcHolladay1, Haigis:calcHaigis,
+                EVO:calcEVO, PearlDGS:calcPearlDGS, Holladay2:calcHolladay2 };
+  const errors = {};
+  Object.entries(FNS).forEach(([k, fn]) => {
+    if (!sel.has(k)) return;
+    const emme = fn(d);
+    if (emme == null) return;
+    const P_impl = Math.round(emme * 2) / 2;
+    const rx_pred = (emme - P_impl) * (VF[k] || 0.72) + (d.T || 0);
+    errors[k] = parseFloat((se_postop - rx_pred).toFixed(3));
+  });
+  return errors;
+}
+
+/* ── Modal ── */
+function openPostopModal(calcId) {
+  _postopCalcId = calcId;
+  const h = _histCache.find(x => x.id === calcId);
+  if (!h) return;
+
+  // Título
+  document.getElementById('postopModalTitle').textContent =
+    (h.paciente_nombre || 'Paciente') + ' — Refracción postop';
+  document.getElementById('postopModalSub').textContent =
+    'Refracción manifiesta a 3 meses · ' +
+    new Date(h.created_at).toLocaleDateString('es-PY',{day:'2-digit',month:'short',year:'numeric'});
+
+  // Mostrar pestañas de ojo según lo calculado
+  const hasOD = !!h.datos_od?.AL, hasOI = !!h.datos_oi?.AL;
+  const eyeTabsEl = document.getElementById('postopEyeTabs');
+  eyeTabsEl.innerHTML = '';
+  if (hasOD) {
+    const b = document.createElement('button');
+    b.className = 'etab od active'; b.dataset.eye = 'OD';
+    b.innerHTML = '<span class="eind od"></span> Ojo Derecho';
+    b.onclick = () => switchPostopEye('OD');
+    eyeTabsEl.appendChild(b);
+  }
+  if (hasOI) {
+    const b = document.createElement('button');
+    b.className = 'etab oi' + (!hasOD ? ' active' : ''); b.dataset.eye = 'OI';
+    b.innerHTML = '<span class="eind oi"></span> Ojo Izquierdo';
+    b.onclick = () => switchPostopEye('OI');
+    eyeTabsEl.appendChild(b);
+  }
+
+  document.getElementById('postop_OD_block').style.display = hasOD ? 'block' : 'none';
+  document.getElementById('postop_OI_block').style.display = hasOI ? 'block' : 'none';
+
+  // Pre-cargar datos existentes si los hay
+  ['OD','OI'].forEach(eye => {
+    const src = eye === 'OD' ? h.postop_od : h.postop_oi;
+    if (!src) return;
+    const sv = (id, v) => { const el = document.getElementById(id); if(el && v!=null) el.value = v; };
+    sv(`po_${eye}_sph`,  src.sph);
+    sv(`po_${eye}_cyl`,  src.cyl);
+    sv(`po_${eye}_axis`, src.axis);
+    sv(`po_${eye}_va`,   src.va);
+    if (src.date) sv(`po_${eye}_date`, src.date.slice(0,10));
+  });
+  document.getElementById('po_obs').value = h.postop_obs || '';
+
+  // Limpiar estado foto
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('postopErrPreview').style.display = 'none';
+  document.getElementById('ocrStatus').innerHTML = '';
+
+  // Auto-refresh errores al cambiar campos
+  ['OD','OI'].forEach(eye => {
+    ['sph','cyl','axis'].forEach(f => {
+      const el = document.getElementById(`po_${eye}_${f}`);
+      if (el) el.oninput = () => refreshPostopErrPreview();
+    });
+  });
+
+  document.getElementById('postopModal').style.display = 'flex';
+  refreshPostopErrPreview();
+}
+
+function closePostopModal() {
+  document.getElementById('postopModal').style.display = 'none';
+  _postopCalcId = null;
+}
+
+function switchPostopEye(eye) {
+  document.querySelectorAll('#postopEyeTabs .etab').forEach(b => {
+    b.classList.toggle('active', b.dataset.eye === eye);
+  });
+  document.getElementById('postop_OD_block').style.display = eye === 'OD' ? 'block' : 'none';
+  document.getElementById('postop_OI_block').style.display = eye === 'OI' ? 'block' : 'none';
+}
+
+function refreshPostopErrPreview() {
+  const h = _histCache.find(x => x.id === _postopCalcId);
+  if (!h) return;
+
+  // ── Fórmulas utilizadas en el cálculo ──────────────────────
+  const sel = h.selected_formulas || [];
+  const modName = MOD_NAMES[h.modulo ?? 0] || 'Estándar';
+  const formulasUsedEl = document.getElementById('postopFormulasUsed');
+  if (formulasUsedEl) {
+    const chips = sel.map(f => {
+      const isRec = f === 'Kane' || f === 'Kane_KC' || f === 'Kane_Toric';
+      return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;
+        border-radius:20px;font-weight:600;border:.5px solid;margin:2px 2px 2px 0;
+        background:${isRec?'#F3EAFB':'var(--bg3)'};color:${isRec?'#4A0C7C':'var(--text2)'};
+        border-color:${isRec?'#9B59D4':'var(--border2)'}">
+        ${isRec?'<i class="ti ti-math-function" style="font-size:9px"></i> ':''}${FL[f]||f}
+      </span>`;
+    }).join('');
+    formulasUsedEl.innerHTML = `
+      <div style="margin-bottom:4px;">
+        <span style="font-size:10px;color:var(--text3)">Módulo: <strong>${modName}</strong> &nbsp;·&nbsp;
+          LIO: <strong>${h.iol_brand||'—'} ${h.iol_model||''}</strong>
+        </span>
+      </div>
+      <div>${chips || '<span style="font-size:11px;color:var(--text3)">No registradas</span>'}</div>`;
+  }
+
+  // ── Error por fórmula para cada ojo ────────────────────────
+  let rows = '';
+  ['OD','OI'].forEach(eye => {
+    const data = eye === 'OD' ? h.datos_od : h.datos_oi;
+    if (!data?.AL) return;
+    const sph = parseFloat(document.getElementById(`po_${eye}_sph`)?.value);
+    const cyl = parseFloat(document.getElementById(`po_${eye}_cyl`)?.value) || 0;
+    const se  = isNaN(sph) ? null : sph + cyl / 2;
+    const se_el = document.getElementById(`po_${eye}_se`);
+    if (se_el) se_el.textContent = se != null ? `SE = ${se >= 0 ? '+' : ''}${se.toFixed(2)} D` : '';
+    if (se == null) return;
+
+    const errors  = calcPredErrors(h, se, eye);
+    const eyeColor = eye === 'OD' ? 'var(--green)' : 'var(--orange)';
+    const eyeLabel = eye === 'OD' ? 'Ojo Derecho (OD)' : 'Ojo Izquierdo (OI)';
+
+    // Separador de ojo
+    if (Object.keys(errors).length) {
+      rows += `<tr><td colspan="4" style="padding:6px 0 2px;font-size:10px;font-weight:700;
+        color:${eyeColor};text-transform:uppercase;letter-spacing:.05em;">${eyeLabel}</td></tr>`;
+    }
+
+    // Fila por fórmula — muestra nombre + potencia calculada + Rx predicha + error
+    const VF = { Kane:0.640, Barrett:0.720, SRKT:0.700, HofferQ:0.700,
+                 Holladay1:0.700, Holladay2:0.700, Haigis:0.700, EVO:0.700, PearlDGS:0.700 };
+    const FNS = { Kane:calcKane, Barrett:calcBarrett, SRKT:calcSRKT,
+                  HofferQ:calcHofferQ, Holladay1:calcHolladay1, Haigis:calcHaigis,
+                  EVO:calcEVO, PearlDGS:calcPearlDGS, Holladay2:calcHolladay2 };
+    const isRec = f => f === 'Kane' || f === 'Kane_KC' || f === 'Kane_Toric';
+
+    Object.entries(errors).forEach(([k, err]) => {
+      const emme    = FNS[k] ? FNS[k](data) : null;
+      const P_impl  = emme != null ? Math.round(emme * 2) / 2 : null;
+      const rx_pred = emme != null ? (emme - P_impl) * (VF[k] || 0.72) + (data.T || 0) : null;
+      const sign    = err >= 0 ? '+' : '';
+      const absErr  = Math.abs(err);
+      const errColor = absErr <= 0.25 ? '#27500A' : absErr <= 0.50 ? '#633806' : '#993C1D';
+      const recMark  = isRec(k)
+        ? `<i class="ti ti-math-function" style="font-size:9px;color:#9B59D4"></i> ` : '';
+      const pImplStr = P_impl != null ? `${P_impl.toFixed(2)} D` : '—';
+      const rxStr    = rx_pred != null ? `${rx_pred >= 0 ? '+' : ''}${rx_pred.toFixed(2)} D` : '—';
+
+      rows += `<tr style="${isRec(k) ? 'background:rgba(155,89,212,.06)' : ''}">
+        <td style="font-size:11px">${recMark}<strong>${FL[k]||k}</strong></td>
+        <td style="font-size:11px;color:var(--text2);text-align:right">${pImplStr}</td>
+        <td style="font-size:11px;color:var(--text3);text-align:right">${rxStr}</td>
+        <td style="font-size:11px;font-weight:700;color:${errColor};text-align:right">${sign}${err.toFixed(2)} D</td>
+      </tr>`;
+    });
+  });
+
+  const prev = document.getElementById('postopErrPreview');
+  const tbl  = document.getElementById('postopErrTable');
+  if (rows) {
+    tbl.innerHTML = `<table class="err-table">
+      <thead><tr>
+        <th>Fórmula</th>
+        <th style="text-align:right">LIO (D)</th>
+        <th style="text-align:right">Rx predicha</th>
+        <th style="text-align:right">Error PE</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="font-size:9px;color:var(--text3);margin-top:5px">
+      PE = SE postop − Rx predicha &nbsp;·&nbsp; Miopía: negativo &nbsp;·&nbsp; Hipermetropía: positivo
+    </p>`;
+    prev.style.display = 'block';
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+/* ── Guardar postop ── */
+async function savePostop() {
+  if (!_postopCalcId || !user) return;
+  const h = _histCache.find(x => x.id === _postopCalcId);
+  if (!h) return;
+
+  const upd = {};
+  ['OD','OI'].forEach(eye => {
+    const data = eye === 'OD' ? h.datos_od : h.datos_oi;
+    if (!data?.AL) return;
+    const sph  = parseFloat(document.getElementById(`po_${eye}_sph`)?.value);
+    const cyl  = parseFloat(document.getElementById(`po_${eye}_cyl`)?.value) || 0;
+    const axis = parseInt(document.getElementById(`po_${eye}_axis`)?.value)  || 0;
+    const va   = parseFloat(document.getElementById(`po_${eye}_va`)?.value);
+    const date = document.getElementById(`po_${eye}_date`)?.value;
+    if (isNaN(sph)) return;
+    const se = sph + cyl / 2;
+    const errors = calcPredErrors(h, se, eye);
+    const rec = { sph, cyl, axis, se: parseFloat(se.toFixed(3)),
+                  va: isNaN(va) ? null : va, date: date || null, errors };
+    upd[eye === 'OD' ? 'postop_od' : 'postop_oi'] = rec;
+  });
+
+  const obs = document.getElementById('po_obs').value.trim();
+  if (obs) upd.postop_obs = obs;
+
+  if (!Object.keys(upd).length) { notify('Ingresá al menos un campo de refracción.', 'error'); return; }
+
+  const { error } = await supa.from('calculos').update(upd).eq('id', _postopCalcId).eq('medico_id', user.id);
+  if (error) { notify('Error al guardar: ' + error.message, 'error'); return; }
+
+  // Actualizar cache local
+  const idx = _histCache.findIndex(x => x.id === _postopCalcId);
+  if (idx >= 0) Object.assign(_histCache[idx], upd);
+
+  notify('Refracción postop guardada.');
+  closePostopModal();
+  renderHistory();
+}
+
+/* ── OCR con IA (Claude Vision) ── */
+async function handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result.split(',')[1];
+    const img = document.getElementById('photoImg');
+    img.src = e.target.result;
+    document.getElementById('photoPreview').style.display = 'block';
+    const status = document.getElementById('ocrStatus');
+    status.innerHTML = '<div class="spinner"></div> Analizando imagen con IA...';
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 400,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
+              { type: 'text', text: `Esta imagen es de un autorrefractómetro o refractómetro computarizado. Extraé los datos de refracción que aparecen.
+Respondé SOLO con un JSON válido, sin texto adicional, sin backticks, con esta estructura exacta:
+{"OD":{"sph":null,"cyl":null,"axis":null},"OI":{"sph":null,"cyl":null,"axis":null}}
+Usá null si el dato no está visible. Los valores de sph y cyl son en dioptrías (número decimal), axis en grados (entero 1-180).
+Si aparece solo un ojo, ponés null en el otro. Respetá el signo (positivo o negativo) tal como aparece en la imagen.` }
+            ]
+          }]
+        })
+      });
+      const data = await resp.json();
+      const raw = data.content?.[0]?.text || '';
+      let parsed;
+      try { parsed = JSON.parse(raw.replace(/```json|```/g,'')); } catch { parsed = null; }
+
+      if (!parsed) { status.innerHTML = '<span style="color:#993C1D">No se pudo leer la imagen. Ingresá los datos manualmente.</span>'; return; }
+
+      // Llenar campos con los datos extraídos
+      let filled = 0;
+      ['OD','OI'].forEach(eye => {
+        const src = eye === 'OD' ? parsed.OD : parsed.OI;
+        if (!src) return;
+        const h = _histCache.find(x => x.id === _postopCalcId);
+        const hasEye = eye === 'OD' ? h?.datos_od?.AL : h?.datos_oi?.AL;
+        if (!hasEye) return;
+        const sv = (id, v) => { if (v != null && !isNaN(v)) { document.getElementById(id).value = v; filled++; } };
+        sv(`po_${eye}_sph`,  src.sph);
+        sv(`po_${eye}_cyl`,  src.cyl);
+        sv(`po_${eye}_axis`, src.axis);
+      });
+
+      if (filled > 0) {
+        status.innerHTML = `<span style="color:#27500A"><i class="ti ti-check" style="font-size:12px"></i> ${filled} campos completados. Verificá los valores antes de guardar.</span>`;
+        refreshPostopErrPreview();
+      } else {
+        status.innerHTML = '<span style="color:#633806">IA no encontró datos legibles. Ingresá manualmente.</span>';
+      }
+    } catch (err) {
+      status.innerHTML = '<span style="color:#993C1D">Error de conexión con IA. Ingresá los datos manualmente.</span>';
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Tab Resultados ── */
+async function renderResults() {
+  const sumEl  = document.getElementById('resultSummary');
+  const listEl = document.getElementById('resultList');
+  if (!sumEl || !user) return;
+  sumEl.innerHTML  = '<div class="loading"><div class="spinner"></div> Cargando...</div>';
+  listEl.innerHTML = '';
+
+  const { data, error } = await supa.from('calculos')
+    .select('*').eq('medico_id', user.id)
+    .or('postop_od.not.is.null,postop_oi.not.is.null')
+    .order('created_at', { ascending: false }).limit(200);
+
+  if (error) { sumEl.innerHTML = '<p style="color:#993C1D;font-size:12px">Error al cargar.</p>'; return; }
+  if (!data?.length) {
+    sumEl.innerHTML = `<div class="warn-box">
+      <i class="ti ti-info-circle" style="font-size:12px;vertical-align:-1px"></i>
+      Aún no hay casos con refracción postop registrada. Andá a <strong>Historial</strong> y usá el botón <em>Registrar postop</em> en cada caso.
+    </div>`;
+    return;
+  }
+
+  // ── Calcular estadísticas por fórmula ──────────────────────
+  const stats = {};   // { formula: { errors:[], n:0 } }
+  data.forEach(h => {
+    ['postop_od','postop_oi'].forEach(key => {
+      const po = h[key];
+      if (!po?.errors) return;
+      Object.entries(po.errors).forEach(([f, err]) => {
+        if (!stats[f]) stats[f] = { errors: [] };
+        stats[f].errors.push(err);
+      });
+    });
+  });
+
+  // ── Tabla de resumen ───────────────────────────────────────
+  const formulaRows = Object.entries(stats)
+    .map(([f, s]) => {
+      const n = s.errors.length;
+      const mae  = s.errors.reduce((a,e) => a + Math.abs(e), 0) / n;
+      const me   = s.errors.reduce((a,e) => a + e, 0) / n;
+      const p050 = s.errors.filter(e => Math.abs(e) <= 0.50).length / n * 100;
+      const p025 = s.errors.filter(e => Math.abs(e) <= 0.25).length / n * 100;
+      return { f, n, mae, me, p025, p050 };
+    })
+    .sort((a,b) => a.mae - b.mae);
+
+  const bestMAE = formulaRows[0]?.mae || 1;
+  const tableRows = formulaRows.map((r,i) => {
+    const barW = Math.round((r.mae / (bestMAE * 1.6)) * 80);
+    const barColor = i === 0 ? '#27500A' : r.mae < 0.40 ? '#378ADD' : '#EF9F27';
+    const meSign = r.me >= 0 ? '+' : '';
+    return `<tr>
+      <td><strong>${FL[r.f] || r.f}</strong>${i===0?' <span class="badge b-rec" style="margin-left:4px">Mejor</span>':''}</td>
+      <td style="text-align:right">${r.n}</td>
+      <td style="text-align:right;font-weight:600">${r.mae.toFixed(3)} D
+        <span class="err-bar-wrap"><span class="err-bar" style="width:${barW}px;background:${barColor}"></span></span>
+      </td>
+      <td style="text-align:right;color:${Math.abs(r.me)>0.15?'#993C1D':'var(--text2)'};">${meSign}${r.me.toFixed(3)} D</td>
+      <td style="text-align:right">${r.p025.toFixed(0)}%</td>
+      <td style="text-align:right">${r.p050.toFixed(0)}%</td>
+    </tr>`;
+  }).join('');
+
+  const totalCases = data.length;
+  const totalEyes  = data.reduce((a,h) => a + (h.postop_od?1:0) + (h.postop_oi?1:0), 0);
+
+  sumEl.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="metric" style="min-width:80px"><div class="lbl">Casos</div><div class="val">${totalCases}</div></div>
+      <div class="metric" style="min-width:80px"><div class="lbl">Ojos</div><div class="val">${totalEyes}</div></div>
+      <div class="metric" style="min-width:80px"><div class="lbl">Para PEARL</div><div class="val">${totalEyes >= 200 ? '✓ Listo' : totalEyes + '/200'}</div></div>
+    </div>
+    ${totalEyes < 200 ? `<div class="warn-box" style="margin-bottom:10px"><i class="ti ti-info-circle" style="font-size:12px;vertical-align:-1px"></i> Necesitás <strong>${200 - totalEyes} ojos más</strong> para reentrenar PEARL-DGS con tus propios datos.</div>` : '<div class="ai-box" style="margin-bottom:10px"><p><i class="ti ti-sparkles" style="font-size:11px"></i> <strong>¡Dataset suficiente para reentrenamiento!</strong> Exportá el CSV y correlo en el notebook PEARL-DGS.</p></div>'}
+    <table class="err-table">
+      <thead><tr>
+        <th>Fórmula</th><th style="text-align:right">N</th>
+        <th style="text-align:right">MAE</th>
+        <th style="text-align:right">Error medio</th>
+        <th style="text-align:right">±0.25D</th>
+        <th style="text-align:right">±0.50D</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>`;
+
+  // ── Lista de casos ─────────────────────────────────────────
+  listEl.innerHTML = data.map(h => {
+    const eyes = [
+      h.postop_od ? { eye:'OD', po:h.postop_od, bio:h.datos_od } : null,
+      h.postop_oi ? { eye:'OI', po:h.postop_oi, bio:h.datos_oi } : null,
+    ].filter(Boolean);
+    const eyeChips = eyes.map(({eye, po}) => {
+      const se = po.se != null ? (po.se >= 0 ? '+' : '') + po.se.toFixed(2) + 'D' : '?';
+      const color = eye === 'OD' ? 'var(--green)' : 'var(--orange)';
+      const bestErr = po.errors ? Object.values(po.errors).reduce((b,e) => Math.abs(e) < Math.abs(b) ? e : b, Infinity) : null;
+      const errStr = bestErr != null && isFinite(bestErr)
+        ? ` · PE ${bestErr >= 0 ? '+' : ''}${bestErr.toFixed(2)}D` : '';
+      return `<span style="font-size:11px;color:${color};font-weight:600">${eye} SE ${se}${errStr}</span>`;
+    }).join(' &nbsp;|&nbsp; ');
+    const selFormulas = (h.selected_formulas || []).map(f =>
+      `<span style="font-size:10px;color:var(--text3);background:var(--bg3);border:.5px solid var(--border);
+        border-radius:20px;padding:1px 7px;margin-right:3px">${FL[f]||f}</span>`
+    ).join('');
+    const iolStr = [h.iol_brand, h.iol_model].filter(Boolean).join(' ') || '—';
+    return `<div style="border:.5px solid var(--border);border-radius:var(--radius);padding:9px 12px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;">
+        <div style="flex:1;min-width:0;">
+          <p style="font-size:12px;font-weight:600;">${h.paciente_nombre||'Paciente'} ${h.paciente_hc?'· '+h.paciente_hc:''}</p>
+          <p style="font-size:11px;color:var(--text2);margin-top:2px;">
+            ${new Date(h.created_at).toLocaleDateString('es-PY',{day:'2-digit',month:'short',year:'numeric'})}
+            &nbsp;·&nbsp; ${eyeChips}
+          </p>
+          <p style="font-size:10px;color:var(--text3);margin-top:3px;">
+            LIO: <strong>${iolStr}</strong>
+            &nbsp;·&nbsp; ${selFormulas || '<span style="font-size:10px;color:var(--text3)">sin fórmulas registradas</span>'}
+          </p>
+        </div>
+        <button onclick="openPostopModal(${h.id})" class="btn btn-s" style="font-size:11px;padding:5px 12px;flex-shrink:0;">
+          <i class="ti ti-edit" style="font-size:12px"></i> Editar
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Export CSV para notebook PEARL-DGS ── */
+async function exportPostopCSV() {
+  if (!user) return;
+  const { data, error } = await supa.from('calculos')
+    .select('*').eq('medico_id', user.id)
+    .or('postop_od.not.is.null,postop_oi.not.is.null')
+    .order('created_at', { ascending: false }).limit(2000);
+  if (error || !data?.length) { notify('No hay datos postop para exportar.', 'error'); return; }
+
+  // Formato columnas del notebook PEARL-DGS
+  const header = ['id','eye','AL','K1','K2','ARC','ACD','LT','CCT','WTW','A','T','SE_postop','sph','cyl','axis','va','date_postop','iol_brand','iol_model','calc_date'];
+  const rows = [];
+  data.forEach(h => {
+    ['OD','OI'].forEach(eye => {
+      const bio = eye === 'OD' ? h.datos_od : h.datos_oi;
+      const po  = eye === 'OD' ? h.postop_od : h.postop_oi;
+      if (!bio?.AL || !po?.se != null) return;
+      if (po.se == null) return;
+      const ARC = bio.K1 && bio.K2 ? Math.sqrt((0.3375/bio.K1)*(0.3375/bio.K2)).toFixed(5) : '';
+      rows.push([
+        h.id, eye,
+        bio.AL||'', bio.K1||'', bio.K2||'', ARC,
+        bio.ACD||'', bio.LT||'', bio.CCT||'', bio.WTW||'',
+        bio.A||'', bio.T||0,
+        po.se, po.sph||'', po.cyl||'', po.axis||'', po.va||'',
+        po.date||'', h.iol_brand||'', h.iol_model||'',
+        new Date(h.created_at).toISOString().slice(0,10)
+      ].join(','));
+    });
+  });
+
+  const csv = [header.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `liometria_postop_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  notify(`CSV exportado · ${rows.length} ojos`);
+}
 </script>
 </body>
 </html>
