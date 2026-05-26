@@ -223,6 +223,36 @@
   /* FOOTER */
   footer { text-align: center; font-size: 11px; color: var(--text3); padding: 1.5rem 0 1rem; }
 
+  /* PRINT CONFIG MODAL */
+  .pm-step { display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;flex:0 0 auto; }
+  .pm-step-num { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);transition:all .2s; }
+  .pm-step-label { font-size:10px;color:var(--text2);white-space:nowrap;transition:color .2s; }
+  .pm-step.active .pm-step-num { background:#4338CA;color:#fff;border-color:#4338CA; }
+  .pm-step.active .pm-step-label { color:#4338CA;font-weight:600; }
+  .pm-step.done .pm-step-num { background:#27500A;color:#fff;border-color:#27500A; }
+  .pm-step.done .pm-step-label { color:#27500A; }
+  .pm-step-connector { flex:1;height:1.5px;background:var(--border2);margin:13px 4px 0;min-width:20px; }
+  .pm-pane { display:none; }
+  .pm-pane.active { display:block; }
+  .pm-formula-chip { padding:6px 14px;border-radius:20px;border:1.5px solid var(--border2);
+    background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;
+    transition:all .15s;user-select:none;font-weight:500; }
+  .pm-formula-chip.sel { background:#4338CA;color:#fff;border-color:#4338CA; }
+  .pm-formula-chip.kane-chip.sel { background:#7C3AED;border-color:#7C3AED; }
+  .pm-range-btn { padding:8px 16px;border-radius:10px;border:1.5px solid var(--border2);
+    background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;
+    text-align:center;line-height:1.4;transition:all .15s;min-width:64px; }
+  .pm-range-btn.active { background:#4338CA;color:#fff;border-color:#4338CA; }
+  .pm-order-btn { padding:7px 18px;border-radius:10px;border:1.5px solid var(--border2);
+    background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s; }
+  .pm-order-btn.active { background:#4338CA;color:#fff;border-color:#4338CA; }
+  .pm-toggle-row { display:flex;align-items:center;gap:10px;padding:7px 10px;
+    border-radius:9px;cursor:pointer;transition:background .12s;border:.5px solid transparent; }
+  .pm-toggle-row:hover { background:var(--bg2); }
+  .pm-toggle-row input[type=checkbox] { width:16px;height:16px;accent-color:#4338CA;cursor:pointer;flex-shrink:0; }
+  .pm-toggle-label { font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px; }
+
   /* POSTOP MODULE */
   .postop-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; padding:2px 8px; border-radius:20px; font-weight:600; border:.5px solid; }
   .postop-ok   { background:#EAF3DE; color:#27500A; border-color:#97C459; }
@@ -773,6 +803,182 @@
     </div>
 
   </div><!-- /appPage -->
+
+  <!-- ===== MODAL CONFIGURACIÓN REPORTE ===== -->
+  <div id="printModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.55);
+       align-items:flex-start;justify-content:center;padding-top:32px;overflow-y:auto;">
+    <div style="background:var(--card);border-radius:16px;padding:0;max-width:580px;width:96%;
+                box-shadow:0 8px 48px rgba(0,0,0,.35);margin-bottom:40px;overflow:hidden;">
+
+      <!-- Header -->
+      <div style="padding:18px 24px 14px;border-bottom:.5px solid var(--border);
+                  display:flex;align-items:center;gap:10px;">
+        <div style="background:#EEF2FF;border-radius:50%;width:36px;height:36px;flex-shrink:0;
+                    display:flex;align-items:center;justify-content:center;">
+          <i class="ti ti-printer" style="color:#4338CA;font-size:17px"></i>
+        </div>
+        <div style="flex:1">
+          <p style="font-weight:700;font-size:14px">Configurar reporte</p>
+          <p style="font-size:11px;color:var(--text2)" id="pmSubtitle">Paso 1 de 3 — Fórmulas a incluir</p>
+        </div>
+        <button onclick="closePrintModal()" style="background:none;border:none;cursor:pointer;
+                color:var(--text2);font-size:20px;line-height:1;padding:0 4px;">✕</button>
+      </div>
+
+      <!-- Step indicators -->
+      <div style="display:flex;padding:10px 24px 0;gap:0;">
+        <div id="pmStep1ind" class="pm-step active" onclick="pmGoto(1)">
+          <span class="pm-step-num">1</span><span class="pm-step-label">Fórmulas</span>
+        </div>
+        <div class="pm-step-connector"></div>
+        <div id="pmStep2ind" class="pm-step" onclick="pmGoto(2)">
+          <span class="pm-step-num">2</span><span class="pm-step-label">Lente</span>
+        </div>
+        <div class="pm-step-connector"></div>
+        <div id="pmStep3ind" class="pm-step" onclick="pmGoto(3)">
+          <span class="pm-step-num">3</span><span class="pm-step-label">Opciones</span>
+        </div>
+      </div>
+
+      <!-- Steps body -->
+      <div style="padding:16px 24px 8px;min-height:240px;">
+
+        <!-- PASO 1: Fórmulas -->
+        <div id="pmPane1" class="pm-pane active">
+          <p style="font-size:11px;color:var(--text2);margin-bottom:10px;">
+            Seleccioná las fórmulas que aparecerán en el reporte. La primera marcada actúa como fórmula principal en el bloque de la lente seleccionada.
+          </p>
+          <div id="pmFormulaChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button onclick="pmSelAllFormulas(true)" class="btn btn-s" style="font-size:11px;padding:4px 12px">Todas</button>
+            <button onclick="pmSelAllFormulas(false)" class="btn btn-s" style="font-size:11px;padding:4px 12px;background:var(--bg3)">Ninguna</button>
+          </div>
+        </div>
+
+        <!-- PASO 2: Lente + rango -->
+        <div id="pmPane2" class="pm-pane">
+          <p style="font-size:11px;color:var(--text2);margin-bottom:10px;">
+            Elegí la lente que aparece en el bloque destacado y el rango de variación de potencia.
+          </p>
+
+          <div class="field" style="margin-bottom:12px;">
+            <label style="font-size:12px;font-weight:600;">Lente destacada en el reporte</label>
+            <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+              <select id="pmLensBrand" style="flex:1;min-width:130px;padding:7px 10px;border-radius:9px;
+                border:.5px solid var(--border);background:var(--bg2);font-size:12px;color:var(--text);"
+                onchange="pmUpdateModels()">
+                <option value="">— Marca —</option>
+              </select>
+              <select id="pmLensModel" style="flex:1;min-width:130px;padding:7px 10px;border-radius:9px;
+                border:.5px solid var(--border);background:var(--bg2);font-size:12px;color:var(--text);">
+                <option value="">— Modelo —</option>
+              </select>
+            </div>
+            <p style="font-size:10px;color:var(--text3);margin-top:4px;">
+              <i class="ti ti-bulb" style="font-size:10px;vertical-align:-1px"></i>
+              Si dejás vacío, se usa la lente seleccionada actualmente en la calculadora.
+            </p>
+          </div>
+
+          <div class="field">
+            <label style="font-size:12px;font-weight:600;">Rango de variación de potencia (±D)</label>
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;" id="pmRangeButtons">
+              <button class="pm-range-btn" data-range="0.5"  onclick="pmSetRange(this)">±0.5 D<br><span style="font-size:9px;color:var(--text3)">3 filas</span></button>
+              <button class="pm-range-btn" data-range="1.0"  onclick="pmSetRange(this)">±1.0 D<br><span style="font-size:9px;color:var(--text3)">5 filas</span></button>
+              <button class="pm-range-btn active" data-range="1.5" onclick="pmSetRange(this)">±1.5 D<br><span style="font-size:9px;color:var(--text3)">7 filas</span></button>
+              <button class="pm-range-btn" data-range="2.0"  onclick="pmSetRange(this)">±2.0 D<br><span style="font-size:9px;color:var(--text3)">9 filas</span></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PASO 3: Secciones + orden -->
+        <div id="pmPane3" class="pm-pane">
+          <p style="font-size:11px;color:var(--text2);margin-bottom:10px;">
+            Controlá qué secciones aparecen y el orden de los ojos en el reporte.
+          </p>
+
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+            <label class="pm-toggle-row">
+              <input type="checkbox" id="pmSecBio" checked>
+              <span class="pm-toggle-label">
+                <i class="ti ti-ruler-measure" style="font-size:12px"></i>
+                Biometría (AL, K, ACD, LT, CCT, WTW)
+              </span>
+            </label>
+            <label class="pm-toggle-row">
+              <input type="checkbox" id="pmSecSpec">
+              <span class="pm-toggle-label">
+                <i class="ti ti-microscope" style="font-size:12px"></i>
+                Microscopía especular
+              </span>
+            </label>
+            <label class="pm-toggle-row">
+              <input type="checkbox" id="pmSecObs" checked>
+              <span class="pm-toggle-label">
+                <i class="ti ti-notes" style="font-size:12px"></i>
+                Observaciones clínicas
+              </span>
+            </label>
+            <label class="pm-toggle-row">
+              <input type="checkbox" id="pmSecIOLBlock" checked>
+              <span class="pm-toggle-label">
+                <i class="ti ti-box" style="font-size:12px"></i>
+                Bloque lente seleccionada (tabla ±D destacada)
+              </span>
+            </label>
+            <label class="pm-toggle-row">
+              <input type="checkbox" id="pmSecFormulas" checked>
+              <span class="pm-toggle-label">
+                <i class="ti ti-calculator" style="font-size:12px"></i>
+                Grid de fórmulas (todas las fórmulas)
+              </span>
+            </label>
+            <label class="pm-toggle-row">
+              <input type="checkbox" id="pmSecCompare">
+              <span class="pm-toggle-label">
+                <i class="ti ti-arrows-diff" style="font-size:12px"></i>
+                Tabla comparativa entre lentes (modo Comparar LIOs)
+              </span>
+            </label>
+          </div>
+
+          <div class="field">
+            <label style="font-size:12px;font-weight:600;">Orden de ojos en el reporte</label>
+            <div style="display:flex;gap:8px;margin-top:6px;">
+              <button id="pmOrderOD" class="pm-order-btn active" onclick="pmSetOrder('OD_first')">
+                OD primero
+              </button>
+              <button id="pmOrderOI" class="pm-order-btn" onclick="pmSetOrder('OI_first')">
+                OI primero
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /steps body -->
+
+      <!-- Footer -->
+      <div style="padding:12px 24px 18px;border-top:.5px solid var(--border);
+                  display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;gap:6px;">
+          <button id="pmBtnBack" onclick="pmNav(-1)" style="display:none;padding:8px 18px;border-radius:9px;
+            border:.5px solid var(--border);background:var(--bg2);font-size:13px;cursor:pointer;">
+            ← Anterior
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="pmSaveStatus" style="font-size:11px;color:var(--text3)"></span>
+          <button id="pmBtnNext" onclick="pmNav(1)" class="btn btn-p" style="font-size:13px;padding:8px 22px;">
+            Siguiente →
+          </button>
+          <button id="pmBtnPrint" onclick="pmExecutePrint()" style="display:none;" class="btn btn-g" style="font-size:13px;padding:8px 22px;">
+            <i class="ti ti-printer"></i> Imprimir ahora
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- ===== MODAL POSTOP ===== -->
   <div id="postopModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto;">
@@ -1908,11 +2114,8 @@ async function calcAll() {
       <p style="font-size:13px; font-weight:600;">${patName} — ${MOD_NAMES[curMod]}</p>
       <div style="display:flex; gap:6px;">
         <div style="display:flex;gap:4px;align-items:center;">
-          <button class="btn btn-s" style="font-size:11px;" onclick="printReport('formulas')" title="Reporte por fórmula estilo IOLMaster">
-            <i class="ti ti-printer"></i> Por fórmula
-          </button>
-          <button class="btn btn-s" style="font-size:11px;background:var(--bg3);" onclick="printReport('lenses')" title="Comparativo de potencias entre todos los LIOs">
-            <i class="ti ti-arrows-diff"></i> Comparar LIOs
+          <button class="btn btn-s" style="font-size:11px;" onclick="openPrintModal()" title="Configurar e imprimir reporte">
+            <i class="ti ti-printer"></i> Imprimir reporte
           </button>
         </div>
         <button class="btn btn-g" style="font-size:11px;" onclick="saveToHistory()"><i class="ti ti-device-floppy"></i> Guardar</button>
@@ -2510,10 +2713,26 @@ const IOL_DB = {
 
 // Inicializar selector de fabricantes
 
-function printReport(mode) {
+function printReport(mode, cfg) {
   // mode: 'formulas' (by formula, IOLMaster style) or 'lenses' (by IOL comparison)
   if (!window._lastCalc) { notify('Primero realizá un cálculo de LIO.', 'error'); return; }
   mode = mode || 'formulas';
+  // Merge config: passed cfg → saved user pref → default
+  const savedCfg = user?.report_config || {};
+  cfg = cfg || { ...PRINT_CFG_DEFAULT, ...savedCfg };
+
+  // Apply config to report generation
+  const cfgFormulas  = new Set(cfg.formulas || PRINT_CFG_DEFAULT.formulas);
+  const cfgRange     = cfg.range     ?? 1.5;
+  const cfgBrand     = cfg.lenteBrand || '';
+  const cfgModel     = cfg.lenteModel || '';
+  const cfgSecBio    = cfg.secBio    ?? true;
+  const cfgSecSpec   = cfg.secSpec   ?? false;
+  const cfgSecObs    = cfg.secObs    ?? true;
+  const cfgSecIOLBlock = cfg.secIOLBlock ?? true;
+  const cfgSecFormulas = cfg.secFormulas ?? true;
+  const cfgSecCompare  = cfg.secCompare  ?? false;
+  const cfgOIFirst   = cfg.eyeOrder === 'OI_first';
 
   const calc = window._lastCalc;
   const mod  = calc.mod;
@@ -2522,14 +2741,14 @@ function printReport(mode) {
   const dateStr = now.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'});
   const timeStr = now.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
   const dob  = calc.patDOB ? new Date(calc.patDOB+' ').toLocaleDateString('es-PY') : '---';
-  const sel  = calc.selectedFormulas ? new Set(calc.selectedFormulas) : null;
-  const hasF = k => !sel || sel.has(k);
-  // Vertex factors medidos vs calculadoras oficiales
-  // Kane=0.640, Barrett=0.720, rest=0.700
+  // hasF: fórmula activa en el reporte = intersección entre lo calculado y la config del médico
+  const calcSel = calc.selectedFormulas ? new Set(calc.selectedFormulas) : null;
+  const hasF = k => cfgFormulas.has(k) && (!calcSel || calcSel.has(k));
+  // Vertex factors
   const VF = { Kane:0.640, Barrett:0.720, SRKT:0.700, HofferQ:0.700,
                Holladay1:0.700, Holladay2:0.700, Haigis:0.700,
                EVO:0.700, PearlDGS:0.700 };
-  const vf   = 0.720;  // default Barrett
+  const vf   = 0.720;
   const inst = user?.institucion || '';
   const medico = `Dr. ${user?.nombre||''} ${user?.apellido||''} · ${user?.matricula||''}`;
 
@@ -2564,18 +2783,20 @@ function printReport(mode) {
     return calcEmme(dd);
   }
 
-  // ── IOL power range HTML (7 rows ±1.5D + Emetropía) ─────────
+  // ── IOL power range HTML — rango configurable ────────────────
   function rangeRows(emme, targetRx, bgRec, formulaKey) {
     if (emme == null) return '<tr><td colspan="2" style="color:#aaa;font-size:7pt;text-align:center;">---</td></tr>';
-    const rec = r2v(emme);
-    const vfF = (VF && formulaKey && VF[formulaKey]) ? VF[formulaKey] : 0.720;
-    const steps = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5];
+    const rec  = r2v(emme);
+    const vfF  = (VF && formulaKey && VF[formulaKey]) ? VF[formulaKey] : 0.720;
+    const half = cfgRange;   // ±D según config (0.5, 1.0, 1.5, 2.0)
+    const steps = [];
+    for (let s = -half; s <= half + 0.001; s += 0.5) steps.push(parseFloat(s.toFixed(1)));
     let rows = steps.map(s => {
-      const p  = Math.round((rec+s)*2)/2;
-      const rx = ((emme-p)*vfF + (targetRx||0));
-      const isR= Math.abs(s)<0.01;
-      const bg = isR ? `background:${bgRec||'#e8f5e9'};` : '';
-      const fw = isR ? 'font-weight:900;' : '';
+      const p  = Math.round((rec + s) * 2) / 2;
+      const rx = (emme - p) * vfF + (targetRx || 0);
+      const isR = Math.abs(s) < 0.01;
+      const bg  = isR ? `background:${bgRec||'#e8f5e9'};` : '';
+      const fw  = isR ? 'font-weight:900;' : '';
       return `<tr style="${bg}${fw}">
         <td style="text-align:right;padding:1px 4px;border:0.5px solid #ddd;">${fmt(p,2,true)}</td>
         <td style="text-align:right;padding:1px 4px;border:0.5px solid #ddd;">${fmt(rx,2,true)}</td>
@@ -2816,35 +3037,50 @@ function printReport(mode) {
       </div>`;
     }
 
-    return `
+      // Lente override: config > calculadora
+      const reportBrand = cfgBrand || calc.iolBrand || '';
+      const reportModel = cfgModel || calc.iolModel || '';
+      // Override calc object brand/model for selectedIOLBlock
+      const _origBrand = calc.iolBrand, _origModel = calc.iolModel;
+      if (cfgBrand) calc.iolBrand = cfgBrand;
+      if (cfgModel) calc.iolModel = cfgModel;
+
+      // Eye order
+      let eyeODData = odData, eyeOSData = oiData;
+      let eyeODLabel = 'OD — Valores biométricos', eyeOSLabel = 'OS — Valores biométricos';
+      let eyeODSpec = calc.specOD, eyeOSSpec = calc.specOS;
+      if (cfgOIFirst) {
+        [eyeODData, eyeOSData] = [oiData, odData];
+        [eyeODLabel, eyeOSLabel] = ['OS — Valores biométricos','OD — Valores biométricos'];
+        [eyeODSpec, eyeOSSpec]   = [calc.specOS, calc.specOD];
+      }
+
+      const result = `
     ${pageHeader('Por fórmula')}
     ${statusBar()}
     ${eyeSecHeader()}
-    <!-- Biometry OD | OS -->
+    ${cfgSecBio ? `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;margin-bottom:6px;
                 padding-bottom:5px;border-bottom:0.5px solid #ccc;">
-      <div>
-        <div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">
-          OD — Valores biométricos
-        </div>
-        ${bioBlock(odData,'OD', calc.specOD)}
-      </div>
-      <div>
-        <div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">
-          OS — Valores biométricos
-        </div>
-        ${bioBlock(oiData,'OS', calc.specOS)}
-      </div>
-    </div>
-    <!-- Lente seleccionada — bloque destacado -->
-    ${selectedIOLBlock()}
-    <!-- Legend OD/OS colors -->
+      <div><div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">${eyeODLabel}</div>
+        ${bioBlock(eyeODData, cfgOIFirst?'OS':'OD', eyeODSpec)}</div>
+      <div><div style="font-size:7pt;font-weight:700;color:#444;margin-bottom:3px;">${eyeOSLabel}</div>
+        ${bioBlock(eyeOSData, cfgOIFirst?'OD':'OS', eyeOSSpec)}</div>
+    </div>` : ''}
+    ${cfgSecObs && calc.patObs ? `<div style="font-size:7pt;color:#333;background:#f9f9f9;border-radius:4px;
+        padding:3px 8px;margin-bottom:6px;border-left:2px solid #ccc;">
+      <b>Observaciones:</b> ${calc.patObs}</div>` : ''}
+    ${cfgSecIOLBlock ? selectedIOLBlock() : ''}
+    ${cfgSecFormulas ? `
     <div style="display:flex;gap:16px;font-size:6.5pt;margin-bottom:4px;">
-      <span><span style="display:inline-block;width:10px;height:10px;background:#e8f5e9;border:0.5px solid #ccc;vertical-align:middle;"></span> OD recomendada</span>
-      <span><span style="display:inline-block;width:10px;height:10px;background:#fce4ec;border:0.5px solid #ccc;vertical-align:middle;"></span> OS recomendada</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#e8f5e9;border:0.5px solid #ccc;vertical-align:middle;"></span> ${cfgOIFirst?'OS':'OD'} recomendada</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#fce4ec;border:0.5px solid #ccc;vertical-align:middle;"></span> ${cfgOIFirst?'OD':'OS'} recomendada</span>
     </div>
-    <!-- Formula grid — each block has OD left / OS right -->
-    ${gridRows}`;
+    ${gridRows}` : ''}`;
+
+      // Restore
+      calc.iolBrand = _origBrand; calc.iolModel = _origModel;
+      return result;
   }
 
   // ══════════════════════════════════════════════════════════
@@ -2978,7 +3214,15 @@ function printReport(mode) {
   }
 
   // ── BUILD & PRINT ─────────────────────────────────────────
-  const body = mode === 'lenses' ? buildLensMode() : buildFormulaMode();
+  // Si secCompare está activo, incluimos ambas secciones; si no, solo fórmulas
+  let body = '';
+  if (cfgSecCompare && !cfgSecFormulas) {
+    body = buildLensMode();
+  } else if (cfgSecCompare && cfgSecFormulas) {
+    body = buildFormulaMode() + '<div style="page-break-before:always;"></div>' + buildLensMode();
+  } else {
+    body = buildFormulaMode();
+  }
 
   // ── Helper para bloque de microscopía especular ─────────────
   function specBlock(spec, eyeLabel) {
@@ -3378,6 +3622,206 @@ function updateK1Axis(eye, val) {
   if (!v || v < 1 || v > 180) { hint.textContent = ''; return; }
   const k1axis = ((v + 90 - 1) % 180) + 1;
   hint.textContent = '→ K1 (plana) queda a ' + k1axis + '°';
+}
+
+/* ============================================================
+   MÓDULO CONFIGURACIÓN DE REPORTE — Modal 3 pasos
+   Guarda preferencias en medicos.report_config (jsonb)
+
+   SQL requerido (ejecutar una vez):
+   ALTER TABLE medicos ADD COLUMN IF NOT EXISTS report_config jsonb;
+   ============================================================ */
+
+// Config por defecto
+const PRINT_CFG_DEFAULT = {
+  formulas:  ['Kane','Barrett','SRKT','HofferQ','Holladay1','Haigis','EVO','PearlDGS'],
+  lenteBrand: '', lenteModel: '',
+  range:      1.5,
+  secBio:     true,  secSpec:     false,
+  secObs:     true,  secIOLBlock: true,
+  secFormulas: true, secCompare:  false,
+  eyeOrder:   'OD_first'
+};
+
+let _pmStep = 1;
+let _pmCfg  = { ...PRINT_CFG_DEFAULT };
+
+const FORMULA_ALL = [
+  { k:'Kane',      label:'Kane 2020', kane:true  },
+  { k:'Barrett',   label:'Barrett II'            },
+  { k:'SRKT',      label:'SRK/T'                 },
+  { k:'HofferQ',   label:'Hoffer Q'              },
+  { k:'Holladay1', label:'Holladay 1'            },
+  { k:'Holladay2', label:'Holladay 2'            },
+  { k:'Haigis',    label:'Haigis'                },
+  { k:'EVO',       label:'EVO 2.0'               },
+  { k:'PearlDGS',  label:'PEARL-DGS'             },
+];
+
+/* ── Abrir / cerrar ── */
+function openPrintModal() {
+  if (!window._lastCalc) { notify('Primero realizá un cálculo de LIO.', 'error'); return; }
+  // Cargar config guardada del user o default
+  const saved = user?.report_config;
+  _pmCfg = saved ? { ...PRINT_CFG_DEFAULT, ...saved } : { ...PRINT_CFG_DEFAULT };
+  _pmStep = 1;
+  pmRenderStep1();
+  pmRenderStep2();
+  pmRenderStep3();
+  pmUpdateNav();
+  document.getElementById('printModal').style.display = 'flex';
+}
+
+function closePrintModal() {
+  document.getElementById('printModal').style.display = 'none';
+}
+
+/* ── Navegación entre pasos ── */
+function pmNav(dir) {
+  const next = _pmStep + dir;
+  if (next < 1 || next > 3) return;
+  pmReadCurrentStep();
+  _pmStep = next;
+  pmUpdateNav();
+}
+
+function pmGoto(n) {
+  if (n >= _pmStep) pmReadCurrentStep();
+  _pmStep = n;
+  pmUpdateNav();
+}
+
+function pmUpdateNav() {
+  // Panes
+  [1,2,3].forEach(n => {
+    document.getElementById(`pmPane${n}`).classList.toggle('active', n === _pmStep);
+    const ind = document.getElementById(`pmStep${n}ind`);
+    ind.classList.toggle('active', n === _pmStep);
+    ind.classList.toggle('done',   n < _pmStep);
+  });
+  // Subtítulo
+  const subs = ['Paso 1 de 3 — Fórmulas a incluir',
+                 'Paso 2 de 3 — Lente destacada y rango',
+                 'Paso 3 de 3 — Secciones y orden'];
+  document.getElementById('pmSubtitle').textContent = subs[_pmStep - 1];
+  // Botones footer
+  document.getElementById('pmBtnBack').style.display  = _pmStep > 1 ? 'block' : 'none';
+  document.getElementById('pmBtnNext').style.display  = _pmStep < 3 ? 'block' : 'none';
+  document.getElementById('pmBtnPrint').style.display = _pmStep === 3 ? 'block' : 'none';
+}
+
+/* ── Paso 1: Fórmulas ── */
+function pmRenderStep1() {
+  const container = document.getElementById('pmFormulaChips');
+  container.innerHTML = FORMULA_ALL.map(f => {
+    const sel = _pmCfg.formulas.includes(f.k);
+    return `<button class="pm-formula-chip${sel?' sel':''}${f.kane?' kane-chip':''}"
+      data-key="${f.k}" onclick="pmToggleFormula(this,'${f.k}')">
+      ${f.kane ? '<i class="ti ti-math-function" style="font-size:11px;vertical-align:-1px"></i> ' : ''}${f.label}
+    </button>`;
+  }).join('');
+}
+
+function pmToggleFormula(btn, key) {
+  const sel = btn.classList.toggle('sel');
+  if (sel) { if (!_pmCfg.formulas.includes(key)) _pmCfg.formulas.push(key); }
+  else { _pmCfg.formulas = _pmCfg.formulas.filter(k => k !== key); }
+}
+
+function pmSelAllFormulas(all) {
+  _pmCfg.formulas = all ? FORMULA_ALL.map(f => f.k) : [];
+  pmRenderStep1();
+}
+
+/* ── Paso 2: Lente + rango ── */
+function pmRenderStep2() {
+  // Poblar marcas
+  const brandSel = document.getElementById('pmLensBrand');
+  brandSel.innerHTML = '<option value="">— Marca —</option>';
+  Object.keys(IOL_DB || {}).sort().forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b; opt.textContent = b;
+    if (b === _pmCfg.lenteBrand) opt.selected = true;
+    brandSel.appendChild(opt);
+  });
+  pmUpdateModels();
+
+  // Rango
+  document.querySelectorAll('.pm-range-btn').forEach(btn => {
+    btn.classList.toggle('active', parseFloat(btn.dataset.range) === _pmCfg.range);
+  });
+}
+
+function pmUpdateModels() {
+  const brand = document.getElementById('pmLensBrand').value;
+  const modelSel = document.getElementById('pmLensModel');
+  modelSel.innerHTML = '<option value="">— Modelo —</option>';
+  if (brand && IOL_DB?.[brand]) {
+    Object.keys(IOL_DB[brand]).sort().forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (m === _pmCfg.lenteModel) opt.selected = true;
+      modelSel.appendChild(opt);
+    });
+  }
+}
+
+function pmSetRange(btn) {
+  document.querySelectorAll('.pm-range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _pmCfg.range = parseFloat(btn.dataset.range);
+}
+
+/* ── Paso 3: Secciones + orden ── */
+function pmRenderStep3() {
+  const fields = ['secBio','secSpec','secObs','secIOLBlock','secFormulas','secCompare'];
+  fields.forEach(f => {
+    const el = document.getElementById('pm' + f.charAt(0).toUpperCase() + f.slice(1));
+    if (el) el.checked = !!_pmCfg[f];
+  });
+  document.getElementById('pmOrderOD').classList.toggle('active', _pmCfg.eyeOrder !== 'OI_first');
+  document.getElementById('pmOrderOI').classList.toggle('active', _pmCfg.eyeOrder === 'OI_first');
+}
+
+function pmSetOrder(order) {
+  _pmCfg.eyeOrder = order;
+  document.getElementById('pmOrderOD').classList.toggle('active', order !== 'OI_first');
+  document.getElementById('pmOrderOI').classList.toggle('active', order === 'OI_first');
+}
+
+/* ── Leer estado actual antes de navegar ── */
+function pmReadCurrentStep() {
+  if (_pmStep === 2) {
+    _pmCfg.lenteBrand = document.getElementById('pmLensBrand').value;
+    _pmCfg.lenteModel = document.getElementById('pmLensModel').value;
+  }
+  if (_pmStep === 3) {
+    const fields = ['secBio','secSpec','secObs','secIOLBlock','secFormulas','secCompare'];
+    fields.forEach(f => {
+      const el = document.getElementById('pm' + f.charAt(0).toUpperCase() + f.slice(1));
+      if (el) _pmCfg[f] = el.checked;
+    });
+  }
+}
+
+/* ── Guardar config + ejecutar impresión ── */
+async function pmExecutePrint() {
+  pmReadCurrentStep();
+  // Asegurar al menos una fórmula
+  if (!_pmCfg.formulas.length) {
+    notify('Seleccioná al menos una fórmula.', 'error'); return;
+  }
+  // Guardar en Supabase
+  const st = document.getElementById('pmSaveStatus');
+  if (st) st.textContent = 'Guardando preferencias...';
+  if (user) {
+    user.report_config = { ..._pmCfg };
+    await supa.from('medicos').update({ report_config: _pmCfg }).eq('id', user.id);
+  }
+  if (st) st.textContent = '';
+  closePrintModal();
+  // Ejecutar con la config
+  printReport('formulas', _pmCfg);
 }
 
 // INIT
