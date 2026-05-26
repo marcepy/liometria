@@ -285,6 +285,31 @@
   @media (prefers-color-scheme: dark) {
     .rx-table tr.rx-rec td { background: #1a3010; color: #C0DD97; }
   }
+
+  /* ── BIOMETRY IMPORT ─────────────────────────────────────── */
+  .bio-import-btn { display:flex;align-items:center;gap:6px;padding:6px 14px;
+    border-radius:9px;border:1.5px solid var(--blue);background:transparent;
+    color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s; }
+  .bio-import-btn:hover { background:var(--blue);color:#fff; }
+
+  /* Import modal */
+  .imp-drop { border:2px dashed var(--border2);border-radius:12px;padding:28px 20px;
+    text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2); }
+  .imp-drop:hover, .imp-drop.drag-over { border-color:var(--blue);background:var(--bg3); }
+  .imp-device-chip { padding:5px 12px;border-radius:20px;border:1px solid var(--border2);
+    background:var(--bg2);color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s; }
+  .imp-device-chip.sel { background:var(--blue);color:#fff;border-color:var(--blue); }
+  .imp-field-row { display:flex;align-items:center;justify-content:space-between;
+    padding:5px 8px;border-radius:7px;transition:background .12s; }
+  .imp-field-row:hover { background:var(--bg2); }
+  .imp-field-key { font-size:11px;color:var(--text2);min-width:80px; }
+  .imp-field-conf { font-size:10px;width:16px;text-align:center;flex-shrink:0; }
+  .imp-field-edit { font-size:12px;padding:3px 8px;border-radius:6px;
+    border:.5px solid var(--border);background:var(--bg3);width:90px;
+    text-align:right;color:var(--text); }
+  .imp-field-edit:focus { outline:none;border-color:var(--blue); }
+  .imp-section-title { font-size:10px;font-weight:700;color:var(--text2);
+    text-transform:uppercase;letter-spacing:.05em;margin:8px 0 4px;padding:0 8px; }
 </style>
 </head>
 <body>
@@ -426,7 +451,7 @@
     </div>
 
     <!-- ===== CALC TAB ===== -->
-    <div id="calcTab" class="tab-content active">
+    <div id="calcTab" class="tab-content">
 
       <!-- MÓDULO -->
       <div class="card">
@@ -490,7 +515,12 @@
       </div>
 
       <div class="card">
-        <div class="card-title"><i class="ti ti-ruler-measure"></i> Biometría ocular</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span><i class="ti ti-ruler-measure"></i> Biometría ocular</span>
+          <button class="bio-import-btn" onclick="openImportModal()">
+            <i class="ti ti-scan" style="font-size:14px"></i> Importar reporte
+          </button>
+        </div>
         <div class="etabs">
           <div class="etab od active" id="etOD" onclick="swEye('OD')"><i class="ti ti-circle" style="font-size:11px; color:var(--green)"></i> OD — Ojo Derecho</div>
           <div class="etab oi" id="etOI" onclick="swEye('OI')"><i class="ti ti-circle" style="font-size:11px; color:var(--orange)"></i> OI — Ojo Izquierdo</div>
@@ -1297,10 +1327,13 @@ function showApp() {
   const b = document.getElementById('docBadge');
   b.classList.remove('hidden');
   b.textContent = `Dr. ${user.nombre} ${user.apellido} · ${user.matricula}`;
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('calcTab').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nav-btn').classList.add('active');
   setMod(0);
   renderProfile();
   renderHistory();
-
 }
 
 // Restaurar sesión al cargar la página
@@ -4320,7 +4353,429 @@ async function exportPostopCSV() {
   a.href = url; a.download = `liometria_postop_${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
   notify(`CSV exportado · ${rows.length} ojos`);
+/* ============================================================
+   MÓDULO IMPORTACIÓN BIOMETRÍA — feature/biometry-import
+   Extrae datos de reportes de IOLMaster 700/500, Anterion,
+   Pentacam, Lenstar, Argos, A-scan y hojas manuscritas
+   usando Claude Vision API.
+   ============================================================ */
+
+let _impDevice = 'auto';
+let _impData   = null;   // { device, OD:{...}, OS:{...}, confidence, warnings }
+
+/* ── Campos biométricos a extraer ───────────────────────────── */
+const IMP_FIELDS = [
+  { k:'AL',    label:'AL',     unit:'mm', step:'0.01', min:14,  max:36  },
+  { k:'K1',    label:'K1',     unit:'D',  step:'0.01', min:35,  max:55  },
+  { k:'K2',    label:'K2',     unit:'D',  step:'0.01', min:35,  max:55  },
+  { k:'Kaxis', label:'Eje K2', unit:'°',  step:'1',    min:1,   max:180 },
+  { k:'ACD',   label:'ACD',    unit:'mm', step:'0.01', min:1.5, max:5.5 },
+  { k:'LT',    label:'LT',     unit:'mm', step:'0.01', min:2,   max:7   },
+  { k:'CCT',   label:'CCT',    unit:'µm', step:'1',    min:350, max:750 },
+  { k:'WTW',   label:'WTW',    unit:'mm', step:'0.1',  min:9,   max:14  },
+];
+
+/* Hints por equipo para el prompt de extracción */
+const IMP_DEVICE_HINTS = {
+  auto:         'auto-detect the device type from the visual layout',
+  iolmaster700: 'Zeiss IOLMaster 700 — SS-OCT biometer, shows AL/K/ACD/LT/CCT/WTW in a structured table, may show 6 AL measurements with mean',
+  iolmaster500: 'Zeiss IOLMaster 500 — optical biometer, similar layout to 700 but older, shows AL mean of 5 measures, K1/K2 in flat/steep format',
+  anterion:     'Heidelberg Anterion — OCT-based, shows Kf/Ks with axis, ELP, ACD (epithelium to lens), CCT, may show corneal layers separately',
+  pentacam:     'Oculus Pentacam — Scheimpflug, shows Kf/Ks/Km, CCT, front/back corneal data, pupil diameter, may NOT have AL or ACD',
+  lenstar:      'Haag-Streit Lenstar LS900 — optical biometer, shows T (lens thickness), VCD (vitreous), AL, K1/K2, retinal thickness',
+  argos:        'Movu Argos — SS-OCT, shows AL/K/ACD/LT/CCT/WTW/pupil/angle-to-angle in tabular format',
+  ascan:        'A-scan ultrasound or handwritten sheet — may have only AL, or AL+ACD+LT separately, units may vary',
+};
+
+/* ── Abrir / cerrar ──────────────────────────────────────────── */
+function openImportModal() {
+  _impData = null;
+  document.getElementById('impStatus').style.display     = 'none';
+  document.getElementById('impPreview').style.display    = 'none';
+  document.getElementById('impConfirmBtn').style.display = 'none';
+  document.getElementById('impDeviceDetected').textContent = '';
+  document.getElementById('impFileInput').value = '';
+  document.getElementById('importModal').style.display = 'flex';
 }
-</script>
+
+function closeImportModal() {
+  document.getElementById('importModal').style.display = 'none';
+}
+
+function impSetDevice(btn) {
+  document.querySelectorAll('.imp-device-chip').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  _impDevice = btn.dataset.dev;
+}
+
+/* ── File handling ───────────────────────────────────────────── */
+function impHandleDrop(e) {
+  e.preventDefault();
+  document.getElementById('impDropZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) impProcessFile(file);
+}
+
+function impHandleFile(e) {
+  const file = e.target.files[0];
+  if (file) impProcessFile(file);
+}
+
+async function impProcessFile(file) {
+  const statusEl = document.getElementById('impStatus');
+  statusEl.style.display = 'block';
+  statusEl.innerHTML = '<span class="spinner"></span> Analizando con IA…';
+  document.getElementById('impPreview').style.display    = 'none';
+  document.getElementById('impConfirmBtn').style.display = 'none';
+
+  // Convert to base64
+  let b64, mediaType;
+  try {
+    b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(r.result.split(',')[1]);
+      r.onerror = () => rej(new Error('No se pudo leer el archivo'));
+      r.readAsDataURL(file);
+    });
+    mediaType = file.type || 'image/jpeg';
+    // PDF: Claude can handle application/pdf
+    if (!mediaType.startsWith('image/') && mediaType !== 'application/pdf') {
+      mediaType = 'image/jpeg';
+    }
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:#993C1D">Error leyendo el archivo: ${e.message}</span>`;
+    return;
+  }
+
+  const hint = IMP_DEVICE_HINTS[_impDevice] || IMP_DEVICE_HINTS.auto;
+
+  const prompt = `This is a biometry/ophthalmology report from: ${hint}.
+
+Extract ALL biometric measurements for the RIGHT eye (OD) and LEFT eye (OS/OI).
+
+Return ONLY valid JSON — no markdown, no backticks, no explanatory text. Use this exact structure:
+{
+  "device": "detected device name or model",
+  "OD": {
+    "AL": null,
+    "K1": null, "K2": null, "Kaxis": null,
+    "ACD": null, "LT": null, "CCT": null, "WTW": null
+  },
+  "OS": {
+    "AL": null,
+    "K1": null, "K2": null, "Kaxis": null,
+    "ACD": null, "LT": null, "CCT": null, "WTW": null
+  },
+  "confidence": { "OD": 0.9, "OS": 0.9 },
+  "warnings": []
+}
+
+Extraction rules:
+- AL: axial length in mm (e.g. 23.45). Use the MEAN value if multiple measurements shown.
+- K1: FLAT meridian keratometry in diopters (smaller value). K2: STEEP (larger value).
+- Kaxis: axis of K2 (steep meridian) in degrees (1–180).
+- ACD: anterior chamber depth in mm from corneal endothelium to anterior lens surface.
+- LT: crystalline lens thickness in mm.
+- CCT: central corneal thickness in MICROMETERS (e.g. 548). NOT millimeters.
+- WTW: white-to-white horizontal corneal diameter in mm.
+- Use null for any field not clearly visible or not measured by this device.
+- If only one eye present, put nulls for the other.
+- confidence: 0.0–1.0 per eye based on image clarity and legibility.
+- warnings: list any ambiguous values, poor image quality, or unusual readings.
+- Do NOT invent or estimate values. null is always better than a guess.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: b64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const raw  = (data.content?.[0]?.text || '').replace(/```json|```/g,'').trim();
+
+    let parsed;
+    try { parsed = JSON.parse(raw); }
+    catch { throw new Error('La IA devolvió un formato inesperado. Intentá con una imagen más clara.'); }
+
+    _impData = parsed;
+    impRenderPreview(parsed);
+
+    const devName = parsed.device || _impDevice;
+    statusEl.innerHTML = `<span style="color:var(--green)">
+      <i class="ti ti-check" style="font-size:12px"></i>
+      Datos extraídos de <strong>${devName}</strong>. Verificá y editá si es necesario.
+    </span>`;
+
+  } catch(err) {
+    const isFileProtocol = location.protocol === 'file:';
+    statusEl.innerHTML = `<span style="color:#993C1D">
+      <i class="ti ti-x" style="font-size:12px"></i>
+      ${isFileProtocol
+        ? 'La importación IA no está disponible en modo local (file://). Subí el archivo a tu servidor o usá entrada manual.'
+        : 'Error: ' + err.message}
+    </span>`;
+  }
+}
+
+/* ── Render preview con campos editables ─────────────────────── */
+function impRenderPreview(data) {
+  ['OD','OS'].forEach(eye => {
+    const eyeData = data[eye] || {};
+    const container = document.getElementById(`impFields${eye}`);
+    if (!container) return;
+
+    container.innerHTML = IMP_FIELDS.map(f => {
+      const val    = eyeData[f.k];
+      const hasVal = val !== null && val !== undefined && val !== '';
+      // Range validation indicator
+      let indicator = '';
+      if (hasVal) {
+        const num = parseFloat(val);
+        const outRange = num < f.min || num > f.max;
+        indicator = outRange
+          ? `<span class="imp-field-conf" title="Fuera de rango esperado" style="color:#EF9F27">⚠</span>`
+          : `<span class="imp-field-conf" title="Valor dentro de rango" style="color:var(--green)">✓</span>`;
+      } else {
+        indicator = `<span class="imp-field-conf" style="color:var(--text3)">—</span>`;
+      }
+
+      return `<div class="imp-field-row">
+        <span class="imp-field-key">${f.label}
+          <span style="font-size:9px;color:var(--text3)">${f.unit}</span>
+        </span>
+        ${indicator}
+        <input class="imp-field-edit" type="number"
+          id="impEdit_${eye}_${f.k}"
+          step="${f.step}" min="${f.min}" max="${f.max}"
+          value="${hasVal ? val : ''}"
+          placeholder="—"
+          oninput="impValidateField(this, ${f.min}, ${f.max})">
+      </div>`;
+    }).join('');
+  });
+
+  // Confidence badge
+  const confOD  = data.confidence?.OD ?? 1;
+  const confOS  = data.confidence?.OS ?? 1;
+  const confAvg = Math.round(((confOD + confOS) / 2) * 100);
+  const confColor = confAvg >= 85 ? 'var(--green)' : confAvg >= 65 ? '#EF9F27' : '#993C1D';
+  document.getElementById('impConfBadge').innerHTML =
+    `<span style="color:${confColor};font-weight:600">Confianza: ${confAvg}%</span>`;
+
+  // Device detected
+  document.getElementById('impDeviceDetected').textContent =
+    data.device ? `Equipo detectado: ${data.device}` : '';
+
+  // Warnings
+  const warnEl = document.getElementById('impWarnings');
+  if (data.warnings?.length) {
+    warnEl.style.display = 'block';
+    warnEl.innerHTML = `<i class="ti ti-alert-triangle" style="font-size:11px;vertical-align:-1px"></i>
+      <strong>Advertencias:</strong><br>` +
+      data.warnings.map(w => `• ${w}`).join('<br>');
+  } else {
+    warnEl.style.display = 'none';
+  }
+
+  document.getElementById('impPreview').style.display    = 'block';
+  document.getElementById('impConfirmBtn').style.display = 'block';
+}
+
+function impValidateField(input, min, max) {
+  const v = parseFloat(input.value);
+  if (input.value === '') { input.style.borderColor = ''; return; }
+  input.style.borderColor = (v < min || v > max) ? '#EF9F27' : 'var(--green)';
+}
+
+/* ── Confirmar y cargar en calculadora ───────────────────────── */
+function impConfirm() {
+  const loadOD = document.getElementById('impLoadOD')?.checked;
+  const loadOS = document.getElementById('impLoadOS')?.checked;
+
+  // Mapping: extracted key → calculator field id suffix
+  const FIELD_MAP = {
+    AL:'AL', K1:'K1', K2:'K2', Kaxis:'Kaxis',
+    ACD:'ACD', LT:'LT', CCT:'CCT', WTW:'WTW'
+  };
+
+  let loaded = 0;
+
+  if (loadOD) loaded += impFillEye('OD', 'OD', FIELD_MAP);
+  if (loadOS) loaded += impFillEye('OS', 'OI', FIELD_MAP);  // OS → OI naming
+
+  if (loaded === 0) {
+    notify('No hay datos para cargar. Ingresá los valores manualmente.', 'error');
+    return;
+  }
+
+  closeImportModal();
+  notify(`Biometría importada — ${loaded} campo${loaded>1?'s':''} cargado${loaded>1?'s':''}.`);
+  swEye(loadOD ? 'OD' : 'OI');
+}
+
+function impFillEye(impEye, calcEye, fieldMap) {
+  let count = 0;
+  Object.entries(fieldMap).forEach(([impKey, calcKey]) => {
+    const editEl   = document.getElementById(`impEdit_${impEye}_${impKey}`);
+    const targetEl = document.getElementById(`${calcEye}_${calcKey}`);
+    if (!editEl || !targetEl) return;
+    const val = editEl.value.trim();
+    if (val === '') return;
+    targetEl.value = val;
+    targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+    count++;
+  });
+  // Update K axis hint
+  const kaxisEl = document.getElementById(`impEdit_${impEye}_Kaxis`);
+  if (kaxisEl?.value) updateK1Axis(calcEye, kaxisEl.value);
+  return count;
+}
+  <!-- ===== MODAL IMPORTACIÓN BIOMETRÍA ===== -->
+  <div id="importModal" style="display:none;position:fixed;inset:0;z-index:9990;
+       background:rgba(0,0,0,.55);align-items:flex-start;justify-content:center;
+       padding-top:32px;overflow-y:auto;">
+    <div style="background:var(--card);border-radius:16px;max-width:640px;width:96%;
+                box-shadow:0 8px 48px rgba(0,0,0,.35);margin-bottom:40px;overflow:hidden;">
+
+      <!-- Header -->
+      <div style="padding:16px 22px 12px;border-bottom:.5px solid var(--border);
+                  display:flex;align-items:center;gap:10px;">
+        <div style="background:#EEF2FF;border-radius:50%;width:36px;height:36px;flex-shrink:0;
+                    display:flex;align-items:center;justify-content:center;">
+          <i class="ti ti-scan" style="color:#4338CA;font-size:17px"></i>
+        </div>
+        <div style="flex:1">
+          <p style="font-weight:700;font-size:14px">Importar biometría</p>
+          <p style="font-size:11px;color:var(--text2)">
+            Subí una foto o PDF del reporte — la IA extrae los datos automáticamente
+          </p>
+        </div>
+        <button onclick="closeImportModal()"
+                style="background:none;border:none;cursor:pointer;color:var(--text2);
+                       font-size:20px;line-height:1;padding:4px;">✕</button>
+      </div>
+
+      <div style="padding:16px 22px 8px">
+
+        <!-- Equipo -->
+        <p style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:7px;">
+          <i class="ti ti-device-analytics" style="font-size:12px;vertical-align:-1px"></i>
+          Equipo (ayuda a la IA a interpretar el formato)
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;" id="impDeviceChips">
+          <button class="imp-device-chip sel" data-dev="auto"        onclick="impSetDevice(this)">Auto-detectar</button>
+          <button class="imp-device-chip"     data-dev="iolmaster700" onclick="impSetDevice(this)">IOLMaster 700</button>
+          <button class="imp-device-chip"     data-dev="iolmaster500" onclick="impSetDevice(this)">IOLMaster 500</button>
+          <button class="imp-device-chip"     data-dev="anterion"     onclick="impSetDevice(this)">Anterion</button>
+          <button class="imp-device-chip"     data-dev="pentacam"     onclick="impSetDevice(this)">Pentacam</button>
+          <button class="imp-device-chip"     data-dev="lenstar"      onclick="impSetDevice(this)">Lenstar</button>
+          <button class="imp-device-chip"     data-dev="argos"        onclick="impSetDevice(this)">Argos</button>
+          <button class="imp-device-chip"     data-dev="ascan"        onclick="impSetDevice(this)">A-scan / manual</button>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="imp-drop" id="impDropZone"
+             onclick="document.getElementById('impFileInput').click()"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="impHandleDrop(event)">
+          <i class="ti ti-photo-scan" style="font-size:34px;color:var(--text3);display:block;margin-bottom:8px"></i>
+          <p style="font-size:13px;font-weight:600;color:var(--text2)">Tocá para cargar o arrastrá aquí</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:3px">
+            JPG · PNG · PDF · Foto de WhatsApp · Hoja manuscrita
+          </p>
+          <input type="file" id="impFileInput" accept="image/*,application/pdf"
+                 style="display:none" onchange="impHandleFile(event)">
+        </div>
+
+        <!-- Status -->
+        <div id="impStatus" style="display:none;margin-top:10px;font-size:12px;
+             padding:8px 12px;border-radius:8px;background:var(--bg2);">
+        </div>
+
+        <!-- Preview -->
+        <div id="impPreview" style="display:none;margin-top:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <p style="font-size:12px;font-weight:700;color:var(--text)">
+              <i class="ti ti-table-check" style="font-size:12px;color:var(--green);vertical-align:-1px"></i>
+              Revisá los datos antes de cargar
+            </p>
+            <span id="impConfBadge" style="font-size:11px;"></span>
+          </div>
+
+          <!-- OD | OS columns -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
+            <div>
+              <div class="imp-section-title">
+                <i class="ti ti-circle-filled" style="font-size:8px;color:var(--green);vertical-align:1px"></i>
+                Ojo Derecho (OD)
+              </div>
+              <div id="impFieldsOD"></div>
+            </div>
+            <div>
+              <div class="imp-section-title">
+                <i class="ti ti-circle-filled" style="font-size:8px;color:var(--orange);vertical-align:1px"></i>
+                Ojo Izquierdo (OI)
+              </div>
+              <div id="impFieldsOS"></div>
+            </div>
+          </div>
+
+          <!-- Eye selection -->
+          <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);
+                      border-radius:8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:11px;font-weight:600;color:var(--text2);">Cargar en calculadora:</span>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="impLoadOD" checked style="accent-color:var(--green)"> OD
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="impLoadOS" checked style="accent-color:var(--orange)"> OI
+            </label>
+          </div>
+
+          <!-- Warnings -->
+          <div id="impWarnings" style="display:none;margin-top:8px;padding:8px 10px;
+               border-radius:8px;background:#FFFBEB;border:.5px solid #D97706;
+               font-size:11px;color:#78350F;line-height:1.5;"></div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div style="padding:10px 22px 16px;border-top:.5px solid var(--border);
+                  display:flex;justify-content:flex-end;gap:8px;align-items:center;
+                  flex-wrap:wrap;margin-top:8px;">
+        <span id="impDeviceDetected" style="font-size:11px;color:var(--text3);margin-right:auto;"></span>
+        <button onclick="closeImportModal()"
+                style="padding:7px 18px;border-radius:9px;border:.5px solid var(--border);
+                       background:var(--bg2);font-size:13px;cursor:pointer;color:var(--text);">
+          Cancelar
+        </button>
+        <button id="impConfirmBtn" onclick="impConfirm()" style="display:none;"
+                class="btn btn-g">
+          <i class="ti ti-check"></i> Cargar en calculadora
+        </button>
+      </div>
+
+    </div>
+  </div>
+
 </body>
 </html>
