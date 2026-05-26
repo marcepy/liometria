@@ -1124,6 +1124,8 @@
 const SUPA_URL = 'https://mxiwdekgupxqugffydgh.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im14aXdkZWtndXB4cXVnZmZ5ZGdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNDQxNjMsImV4cCI6MjA5NDcyMDE2M30.IqCfDmYaCG775J38PivZG7Xs9EsnRXUFmoFoI4vkThQ';
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+// Proxy para API de Anthropic — evita CORS y protege la API key
+const ANTHROPIC_PROXY = `${SUPA_URL}/functions/v1/anthropic-proxy`;
 
 /* ============================================================
    STATE
@@ -4137,7 +4139,7 @@ async function handlePhotoUpload(event) {
     status.innerHTML = '<div class="spinner"></div> Analizando imagen con IA...';
 
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch(ANTHROPIC_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4486,7 +4488,7 @@ Extraction rules:
 - Do NOT invent or estimate values. null is always better than a guess.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch(ANTHROPIC_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
