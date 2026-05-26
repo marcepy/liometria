@@ -2564,12 +2564,12 @@ function printReport(mode) {
     return calcEmme(dd);
   }
 
-  // ── IOL power range HTML (5 rows + Emetropía) ────────────
+  // ── IOL power range HTML (7 rows ±1.5D + Emetropía) ─────────
   function rangeRows(emme, targetRx, bgRec, formulaKey) {
     if (emme == null) return '<tr><td colspan="2" style="color:#aaa;font-size:7pt;text-align:center;">---</td></tr>';
     const rec = r2v(emme);
     const vfF = (VF && formulaKey && VF[formulaKey]) ? VF[formulaKey] : 0.720;
-    const steps = [-1.0,-0.5,0.0,0.5,1.0];
+    const steps = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5];
     let rows = steps.map(s => {
       const p  = Math.round((rec+s)*2)/2;
       const rx = ((emme-p)*vfF + (targetRx||0));
@@ -2719,6 +2719,103 @@ function printReport(mode) {
       gridRows += `</div>`;
     }
 
+    // ── Bloque "Lente seleccionada" estilo markdown ───────────
+    function selectedIOLBlock() {
+      const brand = calc.iolBrand || '', model = calc.iolModel || '';
+      if (!brand && !model) return '';
+
+      // Fórmula principal para este bloque: Kane → Barrett → primera disponible
+      const prefOrder = ['Kane','Barrett','EVO','Holladay2','Haigis','Holladay1','SRKT','HofferQ','PearlDGS'];
+      const primaryKey = prefOrder.find(k => hasF(k)) || (FORMULA_DEFS[0]?.k);
+      if (!primaryKey) return '';
+
+      const primaryLabel = {
+        Kane:'Kane 2020', Barrett:'Barrett II', EVO:'EVO 2.0', Holladay2:'Holladay 2',
+        Haigis:'Haigis', Holladay1:'Holladay 1', SRKT:'SRK/T', HofferQ:'Hoffer Q', PearlDGS:'PEARL-DGS'
+      }[primaryKey] || primaryKey;
+
+      const vfPrim = VF[primaryKey] || 0.720;
+
+      // LF y DF (lens factor / distance factor) estilo Barrett
+      function lensConst(d) {
+        if (!d) return '';
+        const A = d.A || 119;
+        const LF = fmt(A - 118, 2, true);
+        const DF = '+5.0'; // convención Barrett para ojo fáquico normal
+        return `LF = ${LF} &nbsp; DF = ${DF}`;
+      }
+
+      // Tabla ±1.5D para un ojo
+      function eyeTable(emmeVal, targetRx, bgHeader, eyeLabel) {
+        if (!emmeVal) return '';
+        const rec = r2v(emmeVal);
+        const steps = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5];
+        const tRows = steps.map(s => {
+          const p  = Math.round((rec + s) * 2) / 2;
+          const rx = (emmeVal - p) * vfPrim + (targetRx || 0);
+          const isR = Math.abs(s) < 0.01;
+          const rowBg = isR ? bgHeader.replace('33','18') : '';
+          const fw    = isR ? 'font-weight:900;' : '';
+          return `<tr style="background:${rowBg};${fw}">
+            <td style="text-align:right;padding:2px 7px;border:0.5px solid #ccc;">${fmt(p,2,true)}</td>
+            <td style="text-align:right;padding:2px 7px;border:0.5px solid #ccc;
+              color:${Math.abs(rx)<0.125?'#1a5c1a':Math.abs(rx)<0.625?'#333':'#993C1D'}">${fmt(rx,2,true)}</td>
+          </tr>`;
+        }).join('');
+        return `
+          <div>
+            <div style="font-size:7.5pt;font-weight:700;color:#444;margin-bottom:2px;">
+              ${eyeLabel}
+            </div>
+            <div style="font-size:6.5pt;color:#666;margin-bottom:3px;">${lensConst(eyeLabel==='OD'?odData:oiData)}</div>
+            <table style="border-collapse:collapse;font-size:8pt;width:100%;">
+              <thead><tr style="background:${bgHeader};">
+                <th style="padding:2px 7px;text-align:right;font-size:7pt;border:0.5px solid #bbb;">IOL (D)</th>
+                <th style="padding:2px 7px;text-align:right;font-size:7pt;border:0.5px solid #bbb;">Ref. SE (D)</th>
+              </tr></thead>
+              <tbody>${tRows}</tbody>
+              <tfoot><tr><td colspan="2" style="padding:2px 7px;border-top:1.5px solid #999;
+                font-size:6.5pt;background:#f0f0f0;text-align:right;">
+                <b>Emetropía:</b> ${fmt(emmeVal,2,true)} D
+              </td></tr></tfoot>
+            </table>
+          </div>`;
+      }
+
+      const emODp = emOD ? emOD[primaryKey] : null;
+      const emOSp = emOS ? emOS[primaryKey] : null;
+      const hasOD = odData?.AL && emODp != null;
+      const hasOS = oiData?.AL && emOSp != null;
+      if (!hasOD && !hasOS) return '';
+
+      const cols = [
+        hasOD ? eyeTable(emODp, odData?.T||0, '#c8e6c9', 'OD') : null,
+        hasOS ? eyeTable(emOSp, oiData?.T||0, '#fce4ec', 'OS') : null,
+      ].filter(Boolean);
+
+      return `
+      <div style="border:2px solid #222;border-radius:4px;padding:7px 10px;margin-bottom:8px;background:#fafafa;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;border-bottom:1px solid #ccc;padding-bottom:4px;">
+          <div>
+            <span style="font-size:11pt;font-weight:900;letter-spacing:.3px;">${brand} ${model}</span>
+            <span style="font-size:7pt;color:#666;margin-left:8px;">Lente seleccionada</span>
+          </div>
+          <div style="font-size:7.5pt;color:#444;">
+            Fórmula: <b>${primaryLabel}</b>
+            &nbsp;·&nbsp; Objetivo: <b>${fmt(odData?.T||oiData?.T||0,2,true)} D</b>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:${cols.length>1?'1fr 1fr':'1fr'};gap:0 18px;">
+          ${cols.join('')}
+        </div>
+        <div style="font-size:6pt;color:#888;margin-top:4px;">
+          ★ Fila resaltada = potencia recomendada para implantación &nbsp;·&nbsp;
+          Verde: emetropía ±0.12D &nbsp;·&nbsp; Rojo: error &gt;0.62D &nbsp;·&nbsp;
+          Factor vértice: ${vfPrim.toFixed(3)}
+        </div>
+      </div>`;
+    }
+
     return `
     ${pageHeader('Por fórmula')}
     ${statusBar()}
@@ -2739,6 +2836,8 @@ function printReport(mode) {
         ${bioBlock(oiData,'OS', calc.specOS)}
       </div>
     </div>
+    <!-- Lente seleccionada — bloque destacado -->
+    ${selectedIOLBlock()}
     <!-- Legend OD/OS colors -->
     <div style="display:flex;gap:16px;font-size:6.5pt;margin-bottom:4px;">
       <span><span style="display:inline-block;width:10px;height:10px;background:#e8f5e9;border:0.5px solid #ccc;vertical-align:middle;"></span> OD recomendada</span>
@@ -2957,10 +3056,34 @@ function printReport(mode) {
     &nbsp;·&nbsp; ${dateStr} ${timeStr}
   </div>`;
 
+  // ── Nombre de archivo inteligente ─────────────────────────────
+  // Formato: LIOmetria_YYYYMMDD_HHMMSS_NombreApellido_HC_OD|OI|OU
+  function buildFilename() {
+    // Fecha/hora compacta
+    const pad  = n => String(n).padStart(2,'0');
+    const ts   = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    // Nombre del paciente — normalizado (sin tildes, sin espacios especiales)
+    const normalize = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-zA-Z0-9]/g,'').substring(0,24);
+    const patRaw  = (calc.patName||'Paciente').trim();
+    const patNorm = normalize(patRaw) || 'Paciente';
+    // HC / cédula
+    const hcRaw  = (calc.patHC||'').trim();
+    const hcNorm = hcRaw ? normalize(hcRaw).substring(0,12) : '';
+    // Ojos calculados
+    const eyes = calc.eyes || {};
+    const hasOD = !!(eyes.OD?.AL), hasOI = !!(eyes.OI?.AL);
+    const eyeStr = hasOD && hasOI ? 'OU' : hasOD ? 'OD' : 'OI';
+    // Ensamblar
+    const parts = ['LIOmetria', ts, patNorm, hcNorm, eyeStr].filter(Boolean);
+    return parts.join('_');
+  }
+  const filename = buildFilename();
+
   const win = window.open('', '_blank', 'width=860,height=1100');
   win.document.write(`<!DOCTYPE html><html lang="es"><head>
     <meta charset="UTF-8">
-    <title>LIOmetría — ${mode==='lenses'?'Comparativo por LIO':'Por fórmula'}</title>
+    <title>${filename}</title>
     <style>
       *{box-sizing:border-box;margin:0;padding:0;}
       body{background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;padding:8mm 10mm;}
