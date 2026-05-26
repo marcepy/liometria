@@ -4353,6 +4353,7 @@ async function exportPostopCSV() {
   a.href = url; a.download = `liometria_postop_${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
   notify(`CSV exportado · ${rows.length} ojos`);
+}
 /* ============================================================
    MÓDULO IMPORTACIÓN BIOMETRÍA — feature/biometry-import
    Extrae datos de reportes de IOLMaster 700/500, Anterion,
@@ -4647,6 +4648,8 @@ function impFillEye(impEye, calcEye, fieldMap) {
   if (kaxisEl?.value) updateK1Axis(calcEye, kaxisEl.value);
   return count;
 }
+</script>
+
   <!-- ===== MODAL IMPORTACIÓN BIOMETRÍA ===== -->
   <div id="importModal" style="display:none;position:fixed;inset:0;z-index:9990;
        background:rgba(0,0,0,.55);align-items:flex-start;justify-content:center;
