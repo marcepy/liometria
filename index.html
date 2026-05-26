@@ -174,10 +174,10 @@
   .divider { height: .5px; background: var(--border); margin: .75rem 0; }
 
   /* PAGE SYSTEM */
-  .page { display: none; }
-  .page.active { display: block; }
-  .tab-content { display: none; }
-  .tab-content.active { display: block; }
+  .page { display: none !important; }
+  .page.active { display: block !important; }
+  .tab-content { display: none !important; }
+  .tab-content.active { display: block !important; }
 
   /* LOGIN */
   .login-wrap { max-width: 460px; margin: 0 auto; }
@@ -222,6 +222,45 @@
 
   /* FOOTER */
   footer { text-align: center; font-size: 11px; color: var(--text3); padding: 1.5rem 0 1rem; }
+
+  /* BIOMETRY IMPORT MODULE */
+  .bio-import-btn { display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:9px;
+    border:1.5px solid var(--blue);background:transparent;color:var(--blue);font-size:12px;
+    font-weight:600;cursor:pointer;transition:all .15s; }
+  .bio-import-btn:hover { background:var(--blue);color:#fff; }
+  .eye-state-bar { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;
+    background:var(--bg2);border-radius:var(--radius);border:.5px solid var(--border); }
+  .eye-state-chip { padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);
+    background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;
+    transition:all .15s;font-weight:500;white-space:nowrap; }
+  .eye-state-chip.sel-normal   { background:#EAF3DE;color:#27500A;border-color:#97C459; }
+  .eye-state-chip.sel-pseudo   { background:#EEF2FF;color:#3730A3;border-color:#6366F1; }
+  .eye-state-chip.sel-vitrect  { background:#FFF7ED;color:#92400E;border-color:#F59E0B; }
+  .eye-state-chip.sel-oil1000  { background:#FDF2F8;color:#86198F;border-color:#D946EF; }
+  .eye-state-chip.sel-oil5000  { background:#FDF2F8;color:#701A75;border-color:#A21CAF; }
+  .eye-state-chip.sel-gas      { background:#FEF2F2;color:#991B1B;border-color:#EF4444; }
+  .eye-state-chip.sel-aphakia  { background:#FFFBEB;color:#78350F;border-color:#D97706; }
+  .al-adj-badge { display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;
+    border-radius:20px;font-weight:600;margin-left:6px; }
+  .al-adj-warn { background:#FFF7ED;color:#92400E;border:.5px solid #F59E0B; }
+  .al-adj-info { background:#EEF2FF;color:#3730A3;border:.5px solid #6366F1; }
+  .al-adj-ok   { background:#EAF3DE;color:#27500A;border:.5px solid #97C459; }
+  /* Import modal */
+  .imp-drop { border:2px dashed var(--border2);border-radius:12px;padding:28px 20px;
+    text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2); }
+  .imp-drop:hover,.imp-drop.drag-over { border-color:var(--blue);background:var(--bg3); }
+  .imp-device-chip { padding:5px 12px;border-radius:20px;border:1px solid var(--border2);
+    background:var(--bg2);color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s; }
+  .imp-device-chip.sel { background:var(--blue);color:#fff;border-color:var(--blue); }
+  .imp-field-row { display:flex;align-items:center;justify-content:space-between;
+    padding:5px 8px;border-radius:7px;transition:background .12s; }
+  .imp-field-row:hover { background:var(--bg2); }
+  .imp-field-key { font-size:11px;color:var(--text2);min-width:90px; }
+  .imp-field-val { font-size:12px;font-weight:600;color:var(--text);flex:1;text-align:right; }
+  .imp-field-edit { font-size:11px;padding:3px 8px;border-radius:6px;border:.5px solid var(--border);
+    background:var(--bg3);width:90px;text-align:right; }
+  .pseudo-box { background:var(--bg2);border-radius:var(--radius);padding:10px 12px;
+    margin-top:8px;border:.5px solid var(--border);border-left:3px solid #6366F1; }
 
   /* PRINT CONFIG MODAL */
   .pm-step { display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;flex:0 0 auto; }
@@ -415,7 +454,7 @@
   </div>
 
   <!-- APP PAGE -->
-  <div id="appPage" class="page">
+  <div id="appPage" class="page" style="display:none">
 
     <!-- NAV TABS -->
     <div class="nav">
@@ -426,7 +465,7 @@
     </div>
 
     <!-- ===== CALC TAB ===== -->
-    <div id="calcTab" class="tab-content active">
+    <div id="calcTab" class="tab-content">
 
       <!-- MÓDULO -->
       <div class="card">
@@ -490,13 +529,59 @@
       </div>
 
       <div class="card">
-        <div class="card-title"><i class="ti ti-ruler-measure"></i> Biometría ocular</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span><i class="ti ti-ruler-measure"></i> Biometría ocular</span>
+          <button class="bio-import-btn" onclick="openImportModal()">
+            <i class="ti ti-scan" style="font-size:14px"></i> Importar biometría
+          </button>
+        </div>
         <div class="etabs">
           <div class="etab od active" id="etOD" onclick="swEye('OD')"><i class="ti ti-circle" style="font-size:11px; color:var(--green)"></i> OD — Ojo Derecho</div>
           <div class="etab oi" id="etOI" onclick="swEye('OI')"><i class="ti ti-circle" style="font-size:11px; color:var(--orange)"></i> OI — Ojo Izquierdo</div>
         </div>
         <div id="bioOD">
-          <div class="g3" style="margin-bottom:9px;">
+          <!-- Estado del segmento posterior -->
+          <div class="eye-state-bar">
+            <span style="font-size:10px;font-weight:700;color:var(--text2);align-self:center;margin-right:4px;">
+              <i class="ti ti-eye" style="font-size:11px;vertical-align:-1px"></i> Estado OD:
+            </span>
+            <button class="eye-state-chip sel-normal" id="OD_state_normal"  onclick="setEyeState('OD','normal')">Fáquico</button>
+            <button class="eye-state-chip" id="OD_state_pseudo"  onclick="setEyeState('OD','pseudo')">Pseudofáquico</button>
+            <button class="eye-state-chip" id="OD_state_vitrect" onclick="setEyeState('OD','vitrect')">Vitrectomizado</button>
+            <button class="eye-state-chip" id="OD_state_oil1000" onclick="setEyeState('OD','oil1000')">Aceite 1000 cSt</button>
+            <button class="eye-state-chip" id="OD_state_oil5000" onclick="setEyeState('OD','oil5000')">Aceite 5000 cSt</button>
+            <button class="eye-state-chip" id="OD_state_gas"     onclick="setEyeState('OD','gas')">Gas SF6/C3F8</button>
+            <button class="eye-state-chip" id="OD_state_aphakia" onclick="setEyeState('OD','aphakia')">Afaquia</button>
+          </div>
+          <!-- AL adjustment notice -->
+          <div id="OD_alAdjNotice" style="display:none;margin-bottom:8px;font-size:11px;
+               padding:6px 10px;border-radius:8px;background:var(--bg2);">
+          </div>
+          <!-- Pseudophakic fields -->
+          <div id="OD_pseudoFields" class="pseudo-box" style="display:none;margin-bottom:10px;">
+            <p style="font-size:11px;font-weight:700;color:#3730A3;margin-bottom:8px;">
+              <i class="ti ti-box" style="font-size:12px;vertical-align:-1px"></i>
+              LIO in situ (para cálculo de 2° LIO)
+            </p>
+            <div class="g3">
+              <div class="field">
+                <label>Potencia LIO implantado <span class="u">D</span></label>
+                <input type="number" step=".5" id="OD_IOLinSitu" placeholder="21.00"
+                  oninput="updatePseudoCalc('OD')">
+              </div>
+              <div class="field">
+                <label>Modelo LIO implantado</label>
+                <input type="text" id="OD_IOLinSituModel" placeholder="SN60WF, ZCB00…"
+                  oninput="updatePseudoCalc('OD')">
+              </div>
+              <div class="field">
+                <label>Cte-A del LIO implantado</label>
+                <input type="number" step=".01" id="OD_IOLinSituA" placeholder="119.20"
+                  oninput="updatePseudoCalc('OD')">
+              </div>
+            </div>
+            <div id="OD_pseudoNote" style="font-size:10px;color:var(--text2);margin-top:5px;line-height:1.5;"></div>
+          </div>
             <div class="field"><label>AL — Long. axial <span class="u">mm</span></label><input type="number" step=".01" id="OD_AL" placeholder="23.50" min="14" max="36"></div>
             <div class="field"><label>K1 plana <span class="u">D</span></label><input type="number" step=".01" id="OD_K1" placeholder="43.50" min="35" max="55"></div>
             <div class="field"><label>K2 curva <span class="u">D</span></label><input type="number" step=".01" id="OD_K2" placeholder="44.25" min="35" max="55"></div>
@@ -562,7 +647,46 @@
           </div>
         </div>
         <div id="bioOI" style="display:none;">
-          <div class="g3" style="margin-bottom:9px;">
+          <!-- Estado del segmento posterior -->
+          <div class="eye-state-bar">
+            <span style="font-size:10px;font-weight:700;color:var(--text2);align-self:center;margin-right:4px;">
+              <i class="ti ti-eye" style="font-size:11px;vertical-align:-1px"></i> Estado OI:
+            </span>
+            <button class="eye-state-chip sel-normal" id="OI_state_normal"  onclick="setEyeState('OI','normal')">Fáquico</button>
+            <button class="eye-state-chip" id="OI_state_pseudo"  onclick="setEyeState('OI','pseudo')">Pseudofáquico</button>
+            <button class="eye-state-chip" id="OI_state_vitrect" onclick="setEyeState('OI','vitrect')">Vitrectomizado</button>
+            <button class="eye-state-chip" id="OI_state_oil1000" onclick="setEyeState('OI','oil1000')">Aceite 1000 cSt</button>
+            <button class="eye-state-chip" id="OI_state_oil5000" onclick="setEyeState('OI','oil5000')">Aceite 5000 cSt</button>
+            <button class="eye-state-chip" id="OI_state_gas"     onclick="setEyeState('OI','gas')">Gas SF6/C3F8</button>
+            <button class="eye-state-chip" id="OI_state_aphakia" onclick="setEyeState('OI','aphakia')">Afaquia</button>
+          </div>
+          <div id="OI_alAdjNotice" style="display:none;margin-bottom:8px;font-size:11px;
+               padding:6px 10px;border-radius:8px;background:var(--bg2);">
+          </div>
+          <div id="OI_pseudoFields" class="pseudo-box" style="display:none;margin-bottom:10px;">
+            <p style="font-size:11px;font-weight:700;color:#3730A3;margin-bottom:8px;">
+              <i class="ti ti-box" style="font-size:12px;vertical-align:-1px"></i>
+              LIO in situ (para cálculo de 2° LIO)
+            </p>
+            <div class="g3">
+              <div class="field">
+                <label>Potencia LIO implantado <span class="u">D</span></label>
+                <input type="number" step=".5" id="OI_IOLinSitu" placeholder="21.00"
+                  oninput="updatePseudoCalc('OI')">
+              </div>
+              <div class="field">
+                <label>Modelo LIO implantado</label>
+                <input type="text" id="OI_IOLinSituModel" placeholder="SN60WF, ZCB00…"
+                  oninput="updatePseudoCalc('OI')">
+              </div>
+              <div class="field">
+                <label>Cte-A del LIO implantado</label>
+                <input type="number" step=".01" id="OI_IOLinSituA" placeholder="119.20"
+                  oninput="updatePseudoCalc('OI')">
+              </div>
+            </div>
+            <div id="OI_pseudoNote" style="font-size:10px;color:var(--text2);margin-top:5px;line-height:1.5;"></div>
+          </div>
             <div class="field"><label>AL — Long. axial <span class="u">mm</span></label><input type="number" step=".01" id="OI_AL" placeholder="23.50" min="14" max="36"></div>
             <div class="field"><label>K1 plana <span class="u">D</span></label><input type="number" step=".01" id="OI_K1" placeholder="43.50" min="35" max="55"></div>
             <div class="field"><label>K2 curva <span class="u">D</span></label><input type="number" step=".01" id="OI_K2" placeholder="44.25" min="35" max="55"></div>
@@ -803,6 +927,131 @@
     </div>
 
   </div><!-- /appPage -->
+
+  <!-- ===== MODAL IMPORTACIÓN BIOMETRÍA ===== -->
+  <div id="importModal" style="display:none;position:fixed;inset:0;z-index:9997;
+       background:rgba(0,0,0,.55);align-items:flex-start;justify-content:center;
+       padding-top:28px;overflow-y:auto;">
+    <div style="background:var(--card);border-radius:16px;padding:0;max-width:620px;width:96%;
+                box-shadow:0 8px 48px rgba(0,0,0,.35);margin-bottom:40px;overflow:hidden;">
+
+      <!-- Header -->
+      <div style="padding:16px 22px 12px;border-bottom:.5px solid var(--border);
+                  display:flex;align-items:center;gap:10px;">
+        <div style="background:#EEF2FF;border-radius:50%;width:36px;height:36px;flex-shrink:0;
+                    display:flex;align-items:center;justify-content:center;">
+          <i class="ti ti-scan" style="color:#4338CA;font-size:17px"></i>
+        </div>
+        <div style="flex:1">
+          <p style="font-weight:700;font-size:14px">Importar biometría</p>
+          <p style="font-size:11px;color:var(--text2)">Subí una foto o PDF del reporte — la IA extrae los datos automáticamente</p>
+        </div>
+        <button onclick="closeImportModal()" style="background:none;border:none;cursor:pointer;
+                color:var(--text2);font-size:20px;line-height:1;">✕</button>
+      </div>
+
+      <div style="padding:16px 22px;">
+
+        <!-- Equipo selector -->
+        <div style="margin-bottom:14px;">
+          <p style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:7px;">
+            <i class="ti ti-device-analytics" style="font-size:12px;vertical-align:-1px"></i>
+            Equipo / fuente (ayuda a la IA a interpretar el formato)
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;" id="impDeviceChips">
+            <button class="imp-device-chip sel" data-dev="auto"       onclick="impSetDevice(this)">Auto-detectar</button>
+            <button class="imp-device-chip" data-dev="iolmaster700"   onclick="impSetDevice(this)">IOLMaster 700</button>
+            <button class="imp-device-chip" data-dev="iolmaster500"   onclick="impSetDevice(this)">IOLMaster 500</button>
+            <button class="imp-device-chip" data-dev="anterion"       onclick="impSetDevice(this)">Anterion</button>
+            <button class="imp-device-chip" data-dev="pentacam"       onclick="impSetDevice(this)">Pentacam</button>
+            <button class="imp-device-chip" data-dev="lenstar"        onclick="impSetDevice(this)">Lenstar</button>
+            <button class="imp-device-chip" data-dev="argos"          onclick="impSetDevice(this)">Argos</button>
+            <button class="imp-device-chip" data-dev="ascan"          onclick="impSetDevice(this)">A-scan / manual</button>
+          </div>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="imp-drop" id="impDropZone"
+             onclick="document.getElementById('impFileInput').click()"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="impHandleDrop(event)">
+          <i class="ti ti-photo-scan" style="font-size:32px;color:var(--text3);display:block;margin-bottom:8px"></i>
+          <p style="font-size:13px;font-weight:600;color:var(--text2)">Tocá para cargar o arrastrá aquí</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:3px">JPG · PNG · PDF · Foto de WhatsApp · Hoja manuscrita</p>
+          <input type="file" id="impFileInput" accept="image/*,application/pdf" style="display:none"
+                 onchange="impHandleFile(event)">
+        </div>
+
+        <!-- OCR status -->
+        <div id="impStatus" style="margin-top:10px;display:none;font-size:12px;
+             padding:8px 12px;border-radius:8px;background:var(--bg2);">
+        </div>
+
+        <!-- Preview / edit extracted fields -->
+        <div id="impPreview" style="display:none;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <p style="font-size:12px;font-weight:700;">
+              <i class="ti ti-check" style="font-size:12px;color:var(--green);vertical-align:-1px"></i>
+              Datos extraídos — revisá antes de confirmar
+            </p>
+            <span style="font-size:10px;color:var(--text3)">Editables</span>
+          </div>
+
+          <!-- Two-column OD | OS -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
+            <div>
+              <p style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:5px;">
+                <i class="ti ti-circle-filled" style="font-size:8px;vertical-align:1px"></i> OD
+              </p>
+              <div id="impFieldsOD"></div>
+            </div>
+            <div>
+              <p style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:5px;">
+                <i class="ti ti-circle-filled" style="font-size:8px;vertical-align:1px"></i> OI
+              </p>
+              <div id="impFieldsOS"></div>
+            </div>
+          </div>
+
+          <!-- Eyes to fill -->
+          <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border-radius:8px;">
+            <p style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;">
+              ¿Qué ojo(s) cargar en la calculadora?
+            </p>
+            <div style="display:flex;gap:8px;">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                <input type="checkbox" id="impLoadOD" checked style="accent-color:var(--green)"> OD
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                <input type="checkbox" id="impLoadOS" checked style="accent-color:var(--orange)"> OI
+              </label>
+            </div>
+          </div>
+
+          <!-- Warn fields with low confidence -->
+          <div id="impWarnFields" style="display:none;margin-top:8px;padding:7px 10px;
+               border-radius:8px;background:#FFFBEB;border:.5px solid #D97706;font-size:11px;color:#78350F;">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div style="padding:10px 22px 16px;border-top:.5px solid var(--border);
+                  display:flex;justify-content:flex-end;gap:8px;align-items:center;">
+        <span id="impConfidenceBadge" style="font-size:11px;color:var(--text3);margin-right:auto;"></span>
+        <button onclick="closeImportModal()" style="padding:7px 18px;border-radius:9px;
+          border:.5px solid var(--border);background:var(--bg2);font-size:13px;cursor:pointer;">
+          Cancelar
+        </button>
+        <button id="impConfirmBtn" onclick="impConfirm()" style="display:none;"
+                class="btn btn-g" style="font-size:13px;padding:8px 20px;">
+          <i class="ti ti-check"></i> Cargar en calculadora
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== MODAL CONFIGURACIÓN REPORTE ===== -->
   <div id="printModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.55);
@@ -1253,8 +1502,11 @@ async function doLogin() {
 async function logout() {
   await supa.auth.signOut();
   user = null;
+  const ap = document.getElementById('appPage');
+  ap.classList.remove('active');
+  ap.style.display = 'none';
   document.getElementById('loginPage').classList.add('active');
-  document.getElementById('appPage').classList.remove('active');
+  document.getElementById('loginPage').style.display = '';
   document.getElementById('logoutBtn').style.display = 'none';
   document.getElementById('docBadge').classList.add('hidden');
   document.getElementById('loginForm').style.display = 'block';
@@ -1292,15 +1544,22 @@ function notify(msg, type='info') {
 
 function showApp() {
   document.getElementById('loginPage').classList.remove('active');
-  document.getElementById('appPage').classList.add('active');
+  document.getElementById('loginPage').style.display = 'none';
+  const ap = document.getElementById('appPage');
+  ap.style.display = '';   // clear inline override so CSS class takes over
+  ap.classList.add('active');
   document.getElementById('logoutBtn').style.display = 'inline-flex';
   const b = document.getElementById('docBadge');
   b.classList.remove('hidden');
   b.textContent = `Dr. ${user.nombre} ${user.apellido} · ${user.matricula}`;
+  // Activate the default tab explicitly
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('calcTab').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nav-btn').classList.add('active');
   setMod(0);
   renderProfile();
   renderHistory();
-
 }
 
 // Restaurar sesión al cargar la página
@@ -2095,7 +2354,7 @@ async function calcAll() {
   const ctxKeys = ['standard','toric','postLasik','kc','rk'];
   const ra = document.getElementById('resultsArea');
   // Validate biometry before calculating
-  const bioOD = getBio('OD'), bioOS = getBio('OI');
+  const bioOD = getBioWithState('OD'), bioOS = getBioWithState('OI');
   const valOD = eyeSel !== 'OI' ? validateBio(bioOD, 'OD') : null;
   const valOS = eyeSel !== 'OD' ? validateBio(bioOS, 'OI') : null;
 
@@ -2121,13 +2380,17 @@ async function calcAll() {
         <button class="btn btn-g" style="font-size:11px;" onclick="saveToHistory()"><i class="ti ti-device-floppy"></i> Guardar</button>
       </div>
     </div>
-    ${buildValidationBanner(valOD, valOS, eyeSel)}`;
+    ${buildValidationBanner(valOD, valOS, eyeSel)}
+    ${(bioOD?._gasWarning || bioOS?._gasWarning) ? `<div class="warn-box" style="border-color:#EF4444;background:#FEF2F2;color:#991B1B;">
+      <i class="ti ti-alert-triangle" style="font-size:12px;vertical-align:-1px"></i>
+      <strong>Gas intravitreal detectado:</strong> el AL óptico es inválido. Los resultados mostrados son incorrectos. Usá el AL medido por A-scan ecográfico.
+    </div>` : ''}`;
 
   // También verificar AL durante el renderizado y agregar alerta inline si >26mm
   // (esto corre DESPUÉS de calcular, para que el médico vea el resultado Y la alerta)
 
   for (const eye of eyes) {
-    const d = getBio(eye);
+    const d = getBioWithState(eye);
     if (!d.AL || !d.K1 || !d.K2) {
       html += `<div class="card"><p style="color:var(--text2); font-size:12px;"><i class="ti ti-alert-circle" style="font-size:13px; vertical-align:-1px"></i> Faltan datos para ${eye==='OD'?'Ojo Derecho':'Ojo Izquierdo'} (AL, K1, K2 requeridos mínimo).</p></div>`;
       continue;
@@ -3822,6 +4085,352 @@ async function pmExecutePrint() {
   closePrintModal();
   // Ejecutar con la config
   printReport('formulas', _pmCfg);
+}
+
+/* ============================================================
+   MÓDULO IMPORTACIÓN BIOMETRÍA + ESTADO OCULAR
+   ============================================================
+   Correcciones AL por condición ocular (método IOLMaster):
+   - Vitrectomizado (BSS): AL óptico es válido, ajuste menor en ELP
+   - Aceite silicona 1000 cSt: n_silicona=1.403, corr = +(n_vit/n_oil - 1)·AL_sil_seg
+     → corrección clínica empírica: +0.71mm (Haigis, 1999; Laube, 2003)
+   - Aceite silicona 5000 cSt: n=1.474, corrección: +1.25mm
+   - Gas SF6/C3F8: n=1.0 → AL óptico completamente erróneo → requiere US
+   - Pseudofáquico: K efectiva ajustada por LIO in situ (método Masket)
+   ============================================================ */
+
+/* ── Tabla de correcciones de AL ────────────────────────────── */
+const EYE_STATE_CFG = {
+  normal:  { label:'Fáquico',         adjAL:0,     nvit:1.336,  color:'#27500A', bg:'#EAF3DE', warn:false },
+  vitrect: { label:'Vitrectomizado',  adjAL:-0.18, nvit:1.3337, color:'#92400E', bg:'#FFF7ED', warn:false,
+             note:'AL ajustado −0.18mm (Mojzis, Haigis). n_vítreo BSS ≈ 1.3337.' },
+  oil1000: { label:'Aceite 1000 cSt', adjAL:+0.71, nvit:1.336,  color:'#86198F', bg:'#FDF2F8', warn:false,
+             note:'Corrección +0.71mm por aceite de silicona 1000 cSt (n=1.403). Aplicada al AL óptico medido.' },
+  oil5000: { label:'Aceite 5000 cSt', adjAL:+1.25, nvit:1.336,  color:'#701A75', bg:'#FDF2F8', warn:false,
+             note:'Corrección +1.25mm por aceite de silicona 5000 cSt (n=1.474). Aplicada al AL óptico medido.' },
+  gas:     { label:'Gas SF6/C3F8',    adjAL:0,     nvit:1.336,  color:'#991B1B', bg:'#FEF2F2', warn:true,
+             note:'⚠ Gas intravitreal: el AL óptico es INVÁLIDO. Se requiere AL ecográfico (A-scan).' },
+  pseudo:  { label:'Pseudofáquico',   adjAL:0,     nvit:1.336,  color:'#3730A3', bg:'#EEF2FF', warn:false,
+             note:'Ojo pseudofáquico: ajuste de K efectiva por LIO in situ (método Masket/Haigis). Completá los campos del LIO implantado.' },
+  aphakia: { label:'Afaquia',         adjAL:0,     nvit:1.336,  color:'#78350F', bg:'#FFFBEB', warn:false,
+             note:'Afaquia: la ACD y el LT no son aplicables. El cálculo usa solo AL y K.' },
+};
+
+// Estado actual por ojo
+const eyeState = { OD: 'normal', OI: 'normal' };
+
+function setEyeState(eye, state) {
+  eyeState[eye] = state;
+  const cfg = EYE_STATE_CFG[state];
+
+  // Update chip styles
+  Object.keys(EYE_STATE_CFG).forEach(s => {
+    const chip = document.getElementById(`${eye}_state_${s}`);
+    if (!chip) return;
+    chip.className = 'eye-state-chip' + (s === state ? ` sel-${s}` : '');
+  });
+
+  // Show/hide notice
+  const notice = document.getElementById(`${eye}_alAdjNotice`);
+  if (cfg.note || cfg.adjAL !== 0 || cfg.warn) {
+    notice.style.display = 'block';
+    const adjStr = cfg.adjAL !== 0
+      ? `<span class="al-adj-badge ${cfg.warn?'al-adj-warn':'al-adj-info'}">AL ajustado ${cfg.adjAL>0?'+':''}${cfg.adjAL}mm</span>`
+      : '';
+    const warnStr = cfg.warn
+      ? `<span class="al-adj-badge al-adj-warn"><i class="ti ti-alert-triangle" style="font-size:10px"></i> Requiere A-scan</span>`
+      : '';
+    notice.style.background = cfg.bg;
+    notice.innerHTML = `<span style="color:${cfg.color};font-weight:600">${cfg.label}</span>${adjStr}${warnStr}
+      ${cfg.note ? `<br><span style="color:var(--text2)">${cfg.note}</span>` : ''}`;
+  } else {
+    notice.style.display = 'none';
+  }
+
+  // Pseudo fields
+  const pf = document.getElementById(`${eye}_pseudoFields`);
+  if (pf) pf.style.display = state === 'pseudo' ? 'block' : 'none';
+  if (state === 'pseudo') updatePseudoCalc(eye);
+}
+
+function updatePseudoCalc(eye) {
+  const pNote = document.getElementById(`${eye}_pseudoNote`);
+  if (!pNote) return;
+  const P   = parseFloat(document.getElementById(`${eye}_IOLinSitu`)?.value);
+  const A   = parseFloat(document.getElementById(`${eye}_IOLinSituA`)?.value);
+  const mdl = document.getElementById(`${eye}_IOLinSituModel`)?.value || '';
+  if (isNaN(P)) { pNote.textContent = ''; return; }
+  // Masket correction to effective K: ΔK = −0.326·P + 0.101
+  const deltaK = -0.326 * P + 0.101;
+  const deltaStr = (deltaK >= 0 ? '+' : '') + deltaK.toFixed(3);
+  pNote.innerHTML = `Corrección Masket aplicada a K: <strong>${deltaStr} D</strong> &nbsp;·&nbsp;
+    Las fórmulas usarán K_efectiva = K_medida ${deltaStr} D.<br>
+    ${A && !isNaN(A) ? `Cte-A del implante: <strong>${A.toFixed(2)}</strong>` : ''}
+    ${mdl ? ` &nbsp;·&nbsp; Modelo: <strong>${mdl}</strong>` : ''}`;
+}
+
+/* ── Aplica la corrección de AL al leer biometría ─────────────── */
+function getAdjustedAL(eye) {
+  const rawAL = parseFloat(document.getElementById(`${eye}_AL`)?.value);
+  if (isNaN(rawAL)) return rawAL;
+  const state = eyeState[eye] || 'normal';
+  const adj = EYE_STATE_CFG[state]?.adjAL || 0;
+  return rawAL + adj;
+}
+
+/* ── Sobrescribir getBio para incluir estado ocular ──────────────
+   Se llama al calcular — parchea la función existente.          */
+const _origGetBio = window.getBio;
+function getBioWithState(eye) {
+  const d = _origGetBio ? _origGetBio(eye) : getBioRaw(eye);
+  if (!d) return d;
+  const state = eyeState[eye] || 'normal';
+  const cfg = EYE_STATE_CFG[state];
+
+  // Corrección de AL
+  if (cfg.adjAL !== 0 && d.AL) d.AL = parseFloat((d.AL + cfg.adjAL).toFixed(3));
+
+  // Pseudofáquico — corrección Masket sobre K
+  if (state === 'pseudo') {
+    const P = parseFloat(document.getElementById(`${eye}_IOLinSitu`)?.value);
+    if (!isNaN(P)) {
+      const dK = -0.326 * P + 0.101;
+      if (d.K1) d.K1 = parseFloat((d.K1 + dK).toFixed(3));
+      if (d.K2) d.K2 = parseFloat((d.K2 + dK).toFixed(3));
+      d._pseudoCorr = dK;
+      d._iolInSitu  = P;
+    }
+  }
+
+  // Afaquia — limpiar ACD y LT
+  if (state === 'aphakia') { d.ACD = null; d.LT = null; }
+
+  // Gas — advertir pero no corregir (AL inválido)
+  if (state === 'gas') d._gasWarning = true;
+
+  d._eyeState = state;
+  return d;
+}
+
+/* ============================================================
+   IMPORTACIÓN IA — Claude Vision
+   ============================================================ */
+let _impDevice = 'auto';
+let _impExtracted = null;   // { OD:{AL,K1,K2,ACD,LT,CCT,WTW,K1axis}, OS:{...} }
+
+function openImportModal() {
+  _impExtracted = null;
+  document.getElementById('impStatus').style.display = 'none';
+  document.getElementById('impPreview').style.display = 'none';
+  document.getElementById('impConfirmBtn').style.display = 'none';
+  document.getElementById('impConfidenceBadge').textContent = '';
+  document.getElementById('impFileInput').value = '';
+  document.getElementById('importModal').style.display = 'flex';
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').style.display = 'none';
+}
+
+function impSetDevice(btn) {
+  document.querySelectorAll('.imp-device-chip').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  _impDevice = btn.dataset.dev;
+}
+
+function impHandleDrop(e) {
+  e.preventDefault();
+  document.getElementById('impDropZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) impProcessFile(file);
+}
+
+function impHandleFile(e) {
+  const file = e.target.files[0];
+  if (file) impProcessFile(file);
+}
+
+async function impProcessFile(file) {
+  const status = document.getElementById('impStatus');
+  status.style.display = 'block';
+  status.innerHTML = '<span class="spinner"></span> Analizando imagen con IA…';
+  document.getElementById('impPreview').style.display = 'none';
+  document.getElementById('impConfirmBtn').style.display = 'none';
+
+  // Convert to base64
+  const b64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Read failed'));
+    r.readAsDataURL(file);
+  });
+
+  // Build device-specific hint for the prompt
+  const deviceHints = {
+    iolmaster700: 'IOLMaster 700 (Zeiss) — layout with AL, K1/K2, ACD, LT, CCT, WTW in columns',
+    iolmaster500: 'IOLMaster 500 (Zeiss) — similar to 700, may show SNR, AL mean of 5 measures',
+    anterion:     'Anterion (Heidelberg) — OCT-based, shows ELP, CCT, ACD, Kf/Ks with axes',
+    pentacam:     'Pentacam (Oculus) — primarily corneal, may show Kf/Ks/Km, CCT, pupil diameter',
+    lenstar:      'Lenstar LS900 (Haag-Streit) — shows T (lens thickness), VCD, AL, K1/K2',
+    argos:        'Argos (Movué) — shows AL, K, ACD, LT, CCT, WTW, pupil, angle-to-angle',
+    ascan:        'A-scan ultrasound or handwritten sheet — may show AL only, or ACD separately',
+    auto:         'auto-detect the device type from visual layout',
+  };
+  const hint = deviceHints[_impDevice] || deviceHints.auto;
+
+  const prompt = `This is a biometry report from an ophthalmic device (${hint}).
+Extract ALL biometric measurements for RIGHT eye (OD) and LEFT eye (OS/OI).
+
+Return ONLY valid JSON, no markdown backticks, no text, with this exact structure:
+{
+  "device": "device name detected",
+  "OD": { "AL": null, "K1": null, "K2": null, "K1axis": null, "K2axis": null, "ACD": null, "LT": null, "CCT": null, "WTW": null, "Asph": null },
+  "OS": { "AL": null, "K1": null, "K2": null, "K1axis": null, "K2axis": null, "ACD": null, "LT": null, "CCT": null, "WTW": null, "Asph": null },
+  "confidence": { "OD": 0.9, "OS": 0.9 },
+  "warnings": []
+}
+
+Rules:
+- AL in mm (e.g. 23.45)
+- K1 = flat meridian keratometry in diopters (e.g. 43.20), K2 = steep (e.g. 44.50)
+- K1axis and K2axis in degrees (1-180)
+- ACD = anterior chamber depth in mm (cornea to lens, NOT total including CCT unless it's the only value)
+- LT = lens thickness in mm
+- CCT = central corneal thickness in MICROMETERS (e.g. 540)
+- WTW = white-to-white corneal diameter in mm
+- Use null for any field not clearly visible
+- If only one eye is present, leave the other as nulls
+- confidence: 0-1 per eye based on image quality and data clarity
+- warnings: list any ambiguous or possibly incorrect readings`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 800,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: b64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    const data = await resp.json();
+    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { parsed = null; }
+
+    if (!parsed) {
+      status.innerHTML = `<span style="color:#993C1D"><i class="ti ti-x"></i>
+        No se pudo interpretar la imagen. Intentá con mejor iluminación o ingresá los datos manualmente.</span>`;
+      return;
+    }
+
+    _impExtracted = parsed;
+    impRenderPreview(parsed);
+    status.innerHTML = `<span style="color:#27500A"><i class="ti ti-check"></i>
+      Datos extraídos de <strong>${parsed.device || _impDevice}</strong>. Revisá y editá si es necesario.</span>`;
+
+  } catch (err) {
+    status.innerHTML = `<span style="color:#993C1D"><i class="ti ti-x"></i>
+      Error de conexión. Si estás en modo local (file://), la importación IA no está disponible.
+      Ingresá los datos manualmente.</span>`;
+  }
+}
+
+function impRenderPreview(data) {
+  const FIELDS = [
+    { k:'AL',     label:'AL',    unit:'mm',  step:'0.01' },
+    { k:'K1',     label:'K1',    unit:'D',   step:'0.01' },
+    { k:'K2',     label:'K2',    unit:'D',   step:'0.01' },
+    { k:'K1axis', label:'Eje K1',unit:'°',   step:'1'    },
+    { k:'K2axis', label:'Eje K2',unit:'°',   step:'1'    },
+    { k:'ACD',    label:'ACD',   unit:'mm',  step:'0.01' },
+    { k:'LT',     label:'LT',    unit:'mm',  step:'0.01' },
+    { k:'CCT',    label:'CCT',   unit:'µm',  step:'1'    },
+    { k:'WTW',    label:'WTW',   unit:'mm',  step:'0.1'  },
+  ];
+
+  ['OD','OS'].forEach(eye => {
+    const eyeData = data[eye] || {};
+    const container = document.getElementById(`impFields${eye}`);
+    if (!container) return;
+    container.innerHTML = FIELDS.map(f => {
+      const val = eyeData[f.k];
+      const hasVal = val !== null && val !== undefined;
+      return `<div class="imp-field-row">
+        <span class="imp-field-key">${f.label} <span style="font-size:9px;color:var(--text3)">${f.unit}</span></span>
+        <input class="imp-field-edit" type="number" step="${f.step}"
+          id="impEdit_${eye}_${f.k}"
+          value="${hasVal ? val : ''}"
+          placeholder="—"
+          style="${!hasVal ? 'color:var(--text3)' : ''}">
+      </div>`;
+    }).join('');
+  });
+
+  // Confidence badges
+  const confOD = data.confidence?.OD ?? 1;
+  const confOS = data.confidence?.OS ?? 1;
+  const avgConf = ((confOD + confOS) / 2 * 100).toFixed(0);
+  const badge = document.getElementById('impConfidenceBadge');
+  const color = avgConf >= 80 ? '#27500A' : avgConf >= 60 ? '#92400E' : '#991B1B';
+  badge.innerHTML = `<span style="color:${color}">Confianza: <strong>${avgConf}%</strong></span>`;
+
+  // Warnings
+  const warnEl = document.getElementById('impWarnFields');
+  if (data.warnings?.length) {
+    warnEl.style.display = 'block';
+    warnEl.innerHTML = `<i class="ti ti-alert-triangle" style="font-size:12px;vertical-align:-1px"></i>
+      <strong>Advertencias:</strong> ${data.warnings.join(' · ')}`;
+  } else {
+    warnEl.style.display = 'none';
+  }
+
+  document.getElementById('impPreview').style.display = 'block';
+  document.getElementById('impConfirmBtn').style.display = 'block';
+}
+
+function impConfirm() {
+  const loadOD = document.getElementById('impLoadOD')?.checked;
+  const loadOS = document.getElementById('impLoadOS')?.checked;
+
+  const FIELD_MAP = {
+    AL:'AL', K1:'K1', K2:'K2', K2axis:'Kaxis', ACD:'ACD', LT:'LT', CCT:'CCT', WTW:'WTW'
+  };
+
+  if (loadOD) impFillEye('OD', 'OD');
+  if (loadOS) impFillEye('OS', 'OI');  // OS → OI (our naming)
+
+  closeImportModal();
+  notify(`Biometría cargada en la calculadora.`);
+
+  // Show biometry tab if needed
+  swEye(loadOD ? 'OD' : 'OI');
+}
+
+function impFillEye(impEye, calcEye) {
+  const FIELD_MAP = {
+    AL:'AL', K1:'K1', K2:'K2', K2axis:'Kaxis', ACD:'ACD',
+    LT:'LT', CCT:'CCT', WTW:'WTW'
+  };
+  Object.entries(FIELD_MAP).forEach(([impKey, calcKey]) => {
+    const editEl = document.getElementById(`impEdit_${impEye}_${impKey}`);
+    const targetEl = document.getElementById(`${calcEye}_${calcKey}`);
+    if (editEl && targetEl && editEl.value !== '') {
+      targetEl.value = editEl.value;
+      // Trigger change events for dependent fields
+      targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  // K1axis hint
+  const kaxisVal = document.getElementById(`impEdit_${impEye}_K2axis`)?.value;
+  if (kaxisVal) updateK1Axis(calcEye, kaxisVal);
 }
 
 // INIT
