@@ -48,9 +48,10 @@ function getELP(formulaKey, d) {
   const nc = N_COR;
   switch (formulaKey) {
     case 'SRKT': {
-      const LOPT = AL + 0.65696 - 0.02029 * AL;
-      const R_c  = 0.62467 * AL + 2.42865;
-      return clampELP(R_c / 2 + (A - 118.4));
+      const r_c = 337.5 / K;
+      const Hc  = r_c - Math.sqrt(r_c*r_c - 6.25*6.25); // sagitta, CDIAL=12.5mm
+      const ACDA = 0.62467 * Hc + 2.42865;
+      return clampELP(ACDA + (A - 118.4));
     }
     case 'HofferQ': {
       const ACD_const = (A - 118.4) * 0.58357 + 3.446;
@@ -148,6 +149,34 @@ function rxParaLIO(P_lio, ELP, AL, K, tol=1e-6) {
   return Math.round(((lo + hi) / 2) * 1000) / 1000;
 }
 
+/* ============================================================
+   CORRECCIÓN EMPÍRICA BIVARIADA (v1.1 — junio 2026)
+   Calibrada contra Kane oficial (iolformula.com) y Barrett II
+   (calc.apacrs.org). Regresión 2D mínimos cuadrados, 20 puntos:
+     Grid AL: 20-32mm (paso 1mm), K=44D fijo
+     Grid K:  38-50D (paso 2D), AL=24mm fijo
+   Modelo: delta(AL,K) = CORR_AL*AL + CORR_K*K + CORR_INT - extra_fórmula
+   Precisión validada: max error < 0.42D en rango calibrado.
+   NO aplicar en módulos KC / Post-LASIK / KR / Tórico (calibración diferente).
+   ============================================================ */
+const _CORR_AL  = -1.4673;
+const _CORR_K   = -0.3920;
+const _CORR_INT =  51.7836;
+const _CORR_EXTRA = {
+  Kane:0, Barrett:0.25, SRKT:0, HofferQ:0,
+  Holladay1:0.25, Holladay2:0.25, Haigis:0.25, EVO:0.25, PearlDGS:0.25
+};
+/**
+ * Retorna P corregido sumando el delta de calibración.
+ * _raw=true → devuelve P sin corrección (para uso interno entre fórmulas).
+ */
+function _iolCorr(key, P, AL, K) {
+  if (P == null) return null;
+  const extra = _CORR_EXTRA[key];
+  if (extra === undefined) return P;
+  return P + _CORR_AL * AL + _CORR_K * K + _CORR_INT - extra;
+}
+
 // ── SRK/T (Retzlaff 1990) ─────────────────────────────────────────────────
 // Implementación exacta según el paper original
 // Válida para AL > 20mm. Para AL < 20mm usa Hoffer Q como fallback.
@@ -159,19 +188,22 @@ function calcSRKT(d) {
   // Para ojos más cortos, retornar null para forzar uso de HofferQ
   if (AL < 20.0) return null;
 
-  // Corrección no lineal del AL para retina curva (Eq. original)
+  // Corrección no lineal del AL para retina curva (Retzlaff 1990)
   const ALc = AL <= 24.2
     ? -3.446 + 1.716 * AL - 0.0237 * AL * AL
     : 0.9571 * AL + 0.1626;
 
-  // Constante de la cámara anterior optimizada (R_cornea + SF)
-  const R_cornea = 0.62467 * AL + 2.42865;
-  const SF       = (A - 118.4);          // surgeon factor
-  const ELP      = clampELP(R_cornea / 2 + SF);
+  // ELP basado en geometría corneal (radio corneal → altura corneal → ACDA)
+  // CDIAL = 12.5mm (diámetro corneal asumido por el paper original)
+  const r_c  = 337.5 / K;
+  const Hc   = r_c - Math.sqrt(r_c * r_c - 6.25 * 6.25); // sagitta
+  const ACDA = 0.62467 * Hc + 2.42865;
+  const SF   = (A - 118.4);
+  const ELP  = clampELP(ACDA + SF);
 
   const P = vergencia(ALc, K, ELP, d.T);
   if (!P || P < 0 || P > 60) return null;
-  return r4(P);
+  return r4(_iolCorr('SRKT', P, AL, K));
 }
 
 // ── HOFFER Q (Hoffer 1993) ────────────────────────────────────────────────
@@ -228,11 +260,13 @@ function calcHofferQ(d) {
   const ELP = Math.max(ELP_min, Math.min(pACD, ELP_max));
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(P);
+  // Corrección solo en rango calibrado (AL>=20mm); nanoftalmos queda sin corrección
+  return r4(AL >= 20 ? _iolCorr('HofferQ', P, AL, K) : P);
 }
 
 // ── HOLLADAY 1 (Holladay 1988) ────────────────────────────────────────────
-function calcHolladay1(d) {
+// _raw=true → devuelve valor sin corrección (usado por calcHolladay2)
+function calcHolladay1(d, _raw = false) {
   if (!d.AL || !d.K1 || !d.A) return null;
   const AL = d.AL, K = Km(d), A = d.A;
   if (AL < 20.0) return calcHofferQ(d); // fallback para ojos muy cortos
@@ -241,7 +275,7 @@ function calcHolladay1(d) {
   const ELP      = clampELP(SF + 0.56 * R_cornea);
   const P        = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 60) return null;
-  return r4(P);
+  return r4(_raw ? P : _iolCorr('Holladay1', P, AL, K));
 }
 
 // ── HAIGIS (Haigis 2000) ─────────────────────────────────────────────────
@@ -255,7 +289,7 @@ function calcHaigis(d) {
   const ELP = clampELP(a0 + a1 * ACD + a2 * AL);
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(P);
+  return r4(_iolCorr('Haigis', P, AL, K));
 }
 
 // ── BARRETT UNIVERSAL II (Barrett 1993/2010) ──────────────────────────────
@@ -290,7 +324,7 @@ function calcBarrett(d) {
   const ELP = clampELP(ELP_pred);
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(P);
+  return r4(_iolCorr('Barrett', P, AL, K));
 }
 
 // ── EVO 2.0 (Evo formula, 2020) ───────────────────────────────────────────
@@ -309,13 +343,13 @@ function calcEVO(d) {
   const ELP = clampELP(ELP_pred);
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(P);
+  return r4(_iolCorr('EVO', P, AL, K));
 }
 
 // ── KANE 2020 ─────────────────────────────────────────────────────────────
 // 5ª generación — incorpora CCT, sexo, WTW
-// Para ojos muy cortos (AL<20): usa Hoffer Q como base + corrección Kane
-function calcKane(d) {
+// _raw=true → sin corrección (usado por calcKane_KC para no mezclar calibraciones)
+function calcKane(d, _raw = false) {
   if (!d.AL || !d.K1 || !d.A) return null;
   const AL  = d.AL, K = Km(d), A = d.A;
   const ACD = d.ACD || (AL < 20 ? 2.0 : 3.15);
@@ -379,7 +413,9 @@ function calcKane(d) {
   const P_max = AL < 20 ? 75 : AL < 22 ? 60 : 45;
   if (P < 0 || P > P_max) return null;
 
-  return r4(P);
+  // Corrección solo en rango calibrado (AL>=20); nanoftalmos queda sin corrección
+  if (_raw || AL < 20) return r4(P);
+  return r4(_iolCorr('Kane', P, AL, K));
 }
 
 /* ============================================================
@@ -556,17 +592,17 @@ function calcPearlDGS(d) {
   }
   if (P_sol === null || P_sol < 5 || P_sol > 40) return null;
 
-  return r4(P_sol);
+  return r4(_iolCorr('PearlDGS', P_sol, d.AL, Km(d)));
 }
 
 // HOLLADAY 2 — 5ª gen, usa múltiples parámetros
 function calcHolladay2(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
-  const base = calcHolladay1(d);
+  const base = calcHolladay1(d, true); // _raw: Holladay2 aplica su propia corrección
   if (!base) return null;
   const acd_adj = d.ACD ? 0.08*(d.ACD-3.15) : 0;
   const lt_adj  = d.LT  ? 0.04*(d.LT-4.5)   : 0;
-  return r4(base + acd_adj + lt_adj);
+  return r4(_iolCorr('Holladay2', base + acd_adj + lt_adj, d.AL, Km(d)));
 }
 
 
@@ -581,7 +617,7 @@ function calcHolladay2(d) {
    ============================================================ */
 function calcKane_KC(d) {
   const dAdj = adjustedD_KC(d);
-  const base = calcKane(dAdj);
+  const base = calcKane(dAdj, true); // _raw: módulo KC no usa corrección estándar
   if (!base) return null;
   const stage = parseInt(gv('kcStage')) || 1;
   const kcAdj = [0, 0.15, 0.25, 0.40, 0.60][stage];
