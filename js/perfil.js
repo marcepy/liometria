@@ -60,6 +60,3 @@ async function changePassword() {
   if(st) st.innerHTML = '<span style="color:#27500A"><i class="ti ti-check"></i> Contraseña cambiada correctamente.</span>';
   setTimeout(() => { if(st) st.innerHTML = ''; }, 3000);
 }
-
-/* ============================================================
-   PRINT — Zeiss IOLMaster style

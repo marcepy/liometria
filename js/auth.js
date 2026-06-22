@@ -175,5 +175,3 @@ async function initSession() {
     if (prof) { user = { ...prof, id: session.user.id, _email: session.user.email }; showApp(); }
   }
 }
-
-/* ============================================================

@@ -55,5 +55,3 @@ const MOD_NOTES = [
 
 const MOD_BADGES = ['b-ai','b-toric','b-post','b-kc','b-rk'];
 const MOD_NAMES = ['Estándar','Tórico','Post-LASIK/PRK','Queratocono','KR'];
-
-/* ============================================================

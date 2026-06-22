@@ -299,6 +299,3 @@ document.addEventListener('click', e => {
   const dupModal = document.getElementById('dupModal');
   if (dupModal && e.target === dupModal) closeDupModal();
 });
-
-/* ============================================================
-   PERFIL — SUPABASE

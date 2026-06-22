@@ -643,7 +643,3 @@ function adjustedD_RK(d) {
   const safeT = Math.min(d.T || 0, -0.75);
   return { ...d, K1: KcorrAdj, K2: KcorrAdj + ((d.K2||44.25) - (d.K1||43.5)), T: safeT, _factor: factor };
 }
-
-
-/* ============================================================
-   INLINE RX TABLE — potencias ±1.50 D al hacer clic en fórmula

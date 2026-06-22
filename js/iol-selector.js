@@ -109,5 +109,3 @@ function buildAvailabilityBlock(calcResult, iol) {
       </div>
     </div>`;
 }
-
-/* ============================================================

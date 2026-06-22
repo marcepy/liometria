@@ -60,6 +60,3 @@ function togF(f) {
   const c = document.getElementById('chip_'+f);
   if (c) c.classList.toggle('active', activeF.has(f));
 }
-
-/* ============================================================
-   BIOMETRY HELPERS
