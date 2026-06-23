@@ -54,7 +54,7 @@ function getELP(formulaKey, d) {
       return clampELP(ACDA + (A - 118.4));
     }
     case 'HofferQ': {
-      const ACD_const = (A - 118.4) * 0.58357 + 3.446;
+      const ACD_const = (A - 118.4) * 0.58357 + 5.123;
       let pACD;
       if (AL >= 23.0)      pACD = ACD_const + 0.3*(AL-23.0) + 0.1*(K-43.81);
       else if (AL >= 21.0) pACD = ACD_const - 0.4*(23.0-AL) + 0.1*(K-43.81);
@@ -62,26 +62,27 @@ function getELP(formulaKey, d) {
       return clampELP(pACD);
     }
     case 'Holladay1': {
-      const R_c2 = 337.5/K;
-      return clampELP((A-118.4)*0.5663+3.35 + 0.56*R_c2);
+      const r_c2 = 337.5/K;
+      const Hc2  = r_c2 - Math.sqrt(r_c2*r_c2 - 6.25*6.25); // sagitta corneal
+      return clampELP((A-118.4)*0.5663+3.44 + 0.62467*Hc2);
     }
     case 'Haigis': {
-      const a0 = (A-118.4)*0.9-0.507;
+      const a0 = (A-118.4)*0.9+1.540;
       return clampELP(a0 + 0.4*ACD + 0.1*AL);
     }
     case 'Barrett': {
-      const SF = (A-118.4)*0.5663+3.386;
+      const SF = (A-118.4)*0.5663+5.190;
       const AL_eff2 = AL < 22.0 ? Math.max(AL*0.95, AL-0.25*(22.0-AL)) : AL;
       return clampELP(SF + 0.3*(AL_eff2-23.2) + 0.1*(K-43.81) + 0.08*(LT-4.4)
                        + 0.05*(WTW-11.8) + 0.10*(ACD-3.15));
     }
     case 'EVO': {
-      const SF2 = (A-118.4)*0.5619+3.388;
+      const SF2 = (A-118.4)*0.5619+5.208;
       return clampELP(SF2 + 0.28*(AL-23.2) + 0.10*(K-43.81)
                           + 0.12*(ACD-3.15) + 0.07*(LT-4.50));
     }
     case 'Kane': {
-      const SF3 = (A-119.36)*0.5819+3.488;
+      const SF3 = (A-119.36)*0.5819+5.836;
       let AL_eff3 = AL;
       if (AL < 18) AL_eff3 = AL * (AL < 16 ? 1.01 : 1.02);
       else if (AL < 21.5) { const t=(21.5-AL)/(21.5-18); AL_eff3=AL+Math.min(0.8,0.25*t*(21.5-AL)); }
@@ -201,9 +202,11 @@ function calcSRKT(d) {
   const SF   = (A - 118.4);
   const ELP  = clampELP(ACDA + SF);
 
-  const P = vergencia(ALc, K, ELP, d.T);
+  // ALc (corrección para ecografía en modo A) no se usa con biometría óptica.
+  // Se emplea el AL original para la fórmula vergencial.
+  const P = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 60) return null;
-  return r4(_iolCorr('SRKT', P, AL, K));
+  return r4(P);
 }
 
 // ── HOFFER Q (Hoffer 1993) ────────────────────────────────────────────────
@@ -221,7 +224,7 @@ function calcHofferQ(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
   const AL = d.AL, K = Km(d), A = d.A;
 
-  const ACD_const = (A - 118.4) * 0.58357 + 3.446;
+  const ACD_const = (A - 118.4) * 0.58357 + 5.123;
 
   let pACD;
   if (AL >= 23.0) {
@@ -260,22 +263,23 @@ function calcHofferQ(d) {
   const ELP = Math.max(ELP_min, Math.min(pACD, ELP_max));
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  // Corrección solo en rango calibrado (AL>=20mm); nanoftalmos queda sin corrección
-  return r4(AL >= 20 ? _iolCorr('HofferQ', P, AL, K) : P);
+  return r4(P);
 }
 
 // ── HOLLADAY 1 (Holladay 1988) ────────────────────────────────────────────
-// _raw=true → devuelve valor sin corrección (usado por calcHolladay2)
-function calcHolladay1(d, _raw = false) {
+// ELP basado en altura corneal (sagitta) — más precisa que 0.56*R_cornea
+// para corneas planas o curvas fuera del rango normal.
+function calcHolladay1(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
   const AL = d.AL, K = Km(d), A = d.A;
   if (AL < 20.0) return calcHofferQ(d); // fallback para ojos muy cortos
-  const SF      = (A - 118.4) * 0.5663 + 3.35;
-  const R_cornea = 337.5 / K;
-  const ELP      = clampELP(SF + 0.56 * R_cornea);
-  const P        = vergencia(AL, K, ELP, d.T);
+  const SF    = (A - 118.4) * 0.5663 + 3.44;
+  const r_c   = 337.5 / K;
+  const Hc    = r_c - Math.sqrt(r_c*r_c - 6.25*6.25); // sagitta corneal
+  const ELP   = clampELP(SF + 0.62467 * Hc);
+  const P     = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 60) return null;
-  return r4(_raw ? P : _iolCorr('Holladay1', P, AL, K));
+  return r4(P);
 }
 
 // ── HAIGIS (Haigis 2000) ─────────────────────────────────────────────────
@@ -283,13 +287,13 @@ function calcHolladay1(d, _raw = false) {
 function calcHaigis(d) {
   if (!d.AL || !d.K1 || !d.A || !d.ACD) return null;
   const AL = d.AL, K = Km(d), A = d.A, ACD = d.ACD;
-  const a0 = (A - 118.4) * 0.9 - 0.507;  // Haigis a0 from A
+  const a0 = (A - 118.4) * 0.9 + 1.540;  // Haigis a0 from A
   const a1 = 0.400;
   const a2 = 0.100;
   const ELP = clampELP(a0 + a1 * ACD + a2 * AL);
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(_iolCorr('Haigis', P, AL, K));
+  return r4(P);
 }
 
 // ── BARRETT UNIVERSAL II (Barrett 1993/2010) ──────────────────────────────
@@ -302,7 +306,7 @@ function calcBarrett(d) {
   const WTW = d.WTW || 11.8;
 
   // Barrett SF (surgeon factor)
-  const SF   = (A - 118.4) * 0.5663 + 3.386;
+  const SF   = (A - 118.4) * 0.5663 + 5.190;
 
   // AL-adjusted (Barrett usa CMAL-like correction)
   let AL_eff;
@@ -324,7 +328,7 @@ function calcBarrett(d) {
   const ELP = clampELP(ELP_pred);
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(_iolCorr('Barrett', P, AL, K));
+  return r4(P);
 }
 
 // ── EVO 2.0 (Evo formula, 2020) ───────────────────────────────────────────
@@ -333,7 +337,7 @@ function calcEVO(d) {
   const AL  = d.AL, K = Km(d), A = d.A, ACD = d.ACD;
   const LT  = d.LT  || 4.50;
 
-  const SF   = (A - 118.4) * 0.5619 + 3.388;
+  const SF   = (A - 118.4) * 0.5619 + 5.208;
   const ELP_pred = SF
     + 0.28 * (AL - 23.2)
     + 0.10 * (K  - 43.81)
@@ -343,7 +347,7 @@ function calcEVO(d) {
   const ELP = clampELP(ELP_pred);
   const P   = vergencia(AL, K, ELP, d.T);
   if (!P || P < 0 || P > 80) return null;
-  return r4(_iolCorr('EVO', P, AL, K));
+  return r4(P);
 }
 
 // ── KANE 2020 ─────────────────────────────────────────────────────────────
@@ -359,7 +363,7 @@ function calcKane(d, _raw = false) {
   const sex = d.Sex === 'F' ? 1 : 0;
 
   // Kane Surgeon Factor
-  const SF = (A - 119.36) * 0.5819 + 3.488;
+  const SF = (A - 119.36) * 0.5819 + 5.836;
 
   // AL efectivo — Kane usa corrección no lineal suave, con cap para nanoftalmos
   let AL_eff;
@@ -413,9 +417,7 @@ function calcKane(d, _raw = false) {
   const P_max = AL < 20 ? 75 : AL < 22 ? 60 : 45;
   if (P < 0 || P > P_max) return null;
 
-  // Corrección solo en rango calibrado (AL>=20); nanoftalmos queda sin corrección
-  if (_raw || AL < 20) return r4(P);
-  return r4(_iolCorr('Kane', P, AL, K));
+  return r4(P);
 }
 
 /* ============================================================
@@ -592,17 +594,17 @@ function calcPearlDGS(d) {
   }
   if (P_sol === null || P_sol < 5 || P_sol > 40) return null;
 
-  return r4(_iolCorr('PearlDGS', P_sol, d.AL, Km(d)));
+  return r4(P_sol);
 }
 
 // HOLLADAY 2 — 5ª gen, usa múltiples parámetros
 function calcHolladay2(d) {
   if (!d.AL || !d.K1 || !d.A) return null;
-  const base = calcHolladay1(d, true); // _raw: Holladay2 aplica su propia corrección
+  const base = calcHolladay1(d);
   if (!base) return null;
   const acd_adj = d.ACD ? 0.08*(d.ACD-3.15) : 0;
   const lt_adj  = d.LT  ? 0.04*(d.LT-4.5)   : 0;
-  return r4(_iolCorr('Holladay2', base + acd_adj + lt_adj, d.AL, Km(d)));
+  return r4(base + acd_adj + lt_adj);
 }
 
 
